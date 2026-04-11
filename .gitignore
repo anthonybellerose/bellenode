@@ -1,0 +1,46 @@
+# Build outputs
+bin/
+obj/
+out/
+dist/
+build/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+*.pidb
+*.swp
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# NuGet
+*.nupkg
+packages/
+!packages/build/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Env & secrets
+*.env
+*.env.local
+appsettings.Development.json
+appsettings.Production.json
+secrets.json
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
