@@ -4,6 +4,17 @@ obj/
 out/
 dist/
 build/
+publish/
+
+# TS build caches
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+vite.config.d.mts
+vite.config.mjs
+
+# Local playwright screenshots
+.playwright-mcp/
 
 # Visual Studio
 .vs/

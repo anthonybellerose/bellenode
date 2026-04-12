@@ -12,46 +12,53 @@ public class InventoryController : ControllerBase
 
     public InventoryController(BellenodeDbContext db) => _db = db;
 
-    public record InventoryRow(
-        int Id,
-        string Code,
-        int Quantite,
-        bool IsReferenced,
-        string? Nom,
-        string? CodeSaq,
-        decimal? Prix,
-        DateTime UpdatedAt);
-
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] string? search = null, [FromQuery] bool? referenced = null)
     {
-        var query = from inv in _db.Inventory
-                    join prod in _db.Products on inv.Code equals prod.CodeUpc into gj
-                    from prod in gj.DefaultIfEmpty()
-                    select new InventoryRow(
-                        inv.Id,
-                        inv.Code,
-                        inv.Quantite,
-                        inv.IsReferenced,
-                        prod != null ? prod.Nom : null,
-                        prod != null ? prod.CodeSaq : null,
-                        prod != null ? prod.Prix : null,
-                        inv.UpdatedAt);
+        var invQuery = _db.Inventory.AsQueryable();
 
         if (referenced.HasValue)
         {
-            query = query.Where(r => r.IsReferenced == referenced.Value);
+            invQuery = invQuery.Where(i => i.IsReferenced == referenced.Value);
         }
+
+        var items = await invQuery.ToListAsync();
+        if (items.Count == 0) return Ok(Array.Empty<object>());
+
+        var codes = items.Select(i => i.Code).Distinct().ToList();
+        var products = await _db.Products
+            .Where(p => codes.Contains(p.CodeUpc))
+            .ToDictionaryAsync(p => p.CodeUpc);
+
+        var rows = items.Select(i =>
+        {
+            products.TryGetValue(i.Code, out var p);
+            return new
+            {
+                id = i.Id,
+                code = i.Code,
+                quantite = i.Quantite,
+                isReferenced = i.IsReferenced,
+                nom = p?.Nom,
+                codeSaq = p?.CodeSaq,
+                prix = p?.Prix,
+                updatedAt = i.UpdatedAt
+            };
+        }).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
-            query = query.Where(r => r.Code.Contains(s) ||
-                                     (r.Nom != null && r.Nom.ToLower().Contains(s)) ||
-                                     (r.CodeSaq != null && r.CodeSaq.Contains(s)));
+            rows = rows.Where(r => r.code.ToLower().Contains(s) ||
+                                   (r.nom != null && r.nom.ToLower().Contains(s)) ||
+                                   (r.codeSaq != null && r.codeSaq.Contains(s)));
         }
 
-        var result = await query.OrderByDescending(r => r.IsReferenced).ThenBy(r => r.Nom ?? r.Code).ToListAsync();
+        var result = rows
+            .OrderByDescending(r => r.isReferenced)
+            .ThenBy(r => r.nom ?? r.code)
+            .ToList();
+
         return Ok(result);
     }
 
