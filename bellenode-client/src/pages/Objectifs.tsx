@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { InventoryApi, ProductsApi } from '../api/client';
 import type { ObjectifRow, ObjectifStatut } from '../types';
+import UpcInputWithScanner from '../components/UpcInputWithScanner';
 
 const statusLabels: Record<ObjectifStatut, { label: string; badge: string }> = {
   ok: { label: 'OK', badge: 'badge-green' },
@@ -30,15 +31,16 @@ export default function Objectifs() {
     load();
   }, []);
 
+  const searchActive = search.trim().length > 0;
   const filtered = rows.filter((r) => {
-    if (filter === 'all') {
-      // skip nothing
-    } else if (filter === 'alerte') {
-      if (r.statut !== 'bas' && r.statut !== 'rupture') return false;
-    } else if (r.statut !== filter) {
-      return false;
+    if (!searchActive) {
+      if (filter === 'alerte') {
+        if (r.statut !== 'bas' && r.statut !== 'rupture') return false;
+      } else if (filter !== 'all' && r.statut !== filter) {
+        return false;
+      }
     }
-    if (search) {
+    if (searchActive) {
       const s = search.toLowerCase();
       if (!r.nom.toLowerCase().includes(s) && !r.code.includes(s)) return false;
     }
@@ -93,13 +95,14 @@ export default function Objectifs() {
         </FilterBtn>
       </div>
 
-      <input
-        type="search"
-        placeholder="Rechercher..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full md:w-96"
-      />
+      <div className="md:max-w-md">
+        <UpcInputWithScanner
+          value={search}
+          onChange={setSearch}
+          placeholder="Rechercher par nom ou code..."
+          type="search"
+        />
+      </div>
 
       <section className="card overflow-hidden">
         {loading ? (
