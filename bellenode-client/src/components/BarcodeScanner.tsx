@@ -6,11 +6,18 @@ interface Props {
   onModeChange: (m: ScanModeString) => void;
   onDetect: (code: string) => void;
   onClose: () => void;
+  showModeSwitch?: boolean;
 }
 
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'codabar', 'itf'];
 
-export default function BarcodeScanner({ mode, onModeChange, onDetect, onClose }: Props) {
+export default function BarcodeScanner({
+  mode,
+  onModeChange,
+  onDetect,
+  onClose,
+  showModeSwitch = true,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastDetected = useRef<Map<string, number>>(new Map());
@@ -189,25 +196,28 @@ export default function BarcodeScanner({ mode, onModeChange, onDetect, onClose }
             {torchOn ? '💡' : '🔦'}
           </button>
         )}
-        <div className="ml-auto card bg-black/70 backdrop-blur px-3 py-1 text-xs text-gray-200">
-          Mode actif: <strong className="text-white">{mode}</strong>
-        </div>
+        {showModeSwitch && (
+          <div className="ml-auto card bg-black/70 backdrop-blur px-3 py-1 text-xs text-gray-200">
+            Mode actif: <strong className="text-white">{mode}</strong>
+          </div>
+        )}
       </div>
 
-      {/* Mode switcher */}
-      <div className="absolute inset-x-0 top-20 flex justify-center px-4 z-10">
-        <div className="flex gap-2 bg-black/70 backdrop-blur rounded-lg p-1">
-          <ModeBtn active={mode === '+'} onClick={() => onModeChange('+')} color="bg-green-600">
-            + Ajouter
-          </ModeBtn>
-          <ModeBtn active={mode === '-'} onClick={() => onModeChange('-')} color="bg-red-600">
-            − Retirer
-          </ModeBtn>
-          <ModeBtn active={mode === '='} onClick={() => onModeChange('=')} color="bg-accent">
-            = Fixer
-          </ModeBtn>
+      {showModeSwitch && (
+        <div className="absolute inset-x-0 top-20 flex justify-center px-4 z-10">
+          <div className="flex gap-2 bg-black/70 backdrop-blur rounded-lg p-1">
+            <ModeBtn active={mode === '+'} onClick={() => onModeChange('+')} color="bg-green-600">
+              + Ajouter
+            </ModeBtn>
+            <ModeBtn active={mode === '-'} onClick={() => onModeChange('-')} color="bg-red-600">
+              − Retirer
+            </ModeBtn>
+            <ModeBtn active={mode === '='} onClick={() => onModeChange('=')} color="bg-accent">
+              = Fixer
+            </ModeBtn>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Bottom feedback */}
       <div className="absolute bottom-0 inset-x-0 p-3 space-y-2 z-10">

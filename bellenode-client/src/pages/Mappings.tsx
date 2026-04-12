@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MappingsApi } from '../api/client';
 import type { CaisseMapping } from '../types';
+import UpcInputWithScanner from '../components/UpcInputWithScanner';
 
 export default function Mappings() {
   const [mappings, setMappings] = useState<CaisseMapping[]>([]);
@@ -185,22 +186,11 @@ function MappingForm({
         <h3 className="text-xl font-bold">{initial ? 'Modifier le mapping' : 'Nouveau mapping'}</h3>
         <div>
           <label className="block text-sm text-gray-400 mb-1">Code de la caisse</label>
-          <input
-            type="text"
-            value={codeCaisse}
-            onChange={(e) => setCodeCaisse(e.target.value)}
-            className="w-full font-mono"
-            autoFocus
-          />
+          <UpcInputWithScanner value={codeCaisse} onChange={setCodeCaisse} autoFocus />
         </div>
         <div>
           <label className="block text-sm text-gray-400 mb-1">Code de la bouteille unitaire</label>
-          <input
-            type="text"
-            value={codeUnite}
-            onChange={(e) => setCodeUnite(e.target.value)}
-            className="w-full font-mono"
-          />
+          <UpcInputWithScanner value={codeUnite} onChange={setCodeUnite} />
         </div>
         <div>
           <label className="block text-sm text-gray-400 mb-1">Quantité par caisse</label>

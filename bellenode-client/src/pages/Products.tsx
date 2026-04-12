@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ProductsApi } from '../api/client';
 import type { Product } from '../types';
+import UpcInputWithScanner from '../components/UpcInputWithScanner';
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -58,17 +59,17 @@ export default function Products() {
         </button>
       </header>
 
-      <div className="flex gap-2">
-        <input
-          type="search"
-          placeholder="Rechercher nom, UPC, SAQ..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 md:w-96 md:flex-initial"
-          autoComplete="off"
-        />
+      <div className="flex gap-2 items-start">
+        <div className="flex-1 md:max-w-md">
+          <UpcInputWithScanner
+            value={search}
+            onChange={setSearch}
+            placeholder="Rechercher nom, UPC, SAQ..."
+            type="search"
+          />
+        </div>
         <button
-          className="btn btn-primary md:hidden px-4"
+          className="btn btn-primary md:hidden px-4 flex-shrink-0"
           onClick={() => {
             setEditing(null);
             setShowForm(true);
@@ -205,7 +206,7 @@ function ProductForm({
 
         <div>
           <label className="block text-sm text-gray-400 mb-1">Code UPC</label>
-          <input type="text" value={codeUpc} onChange={(e) => setCodeUpc(e.target.value)} className="w-full font-mono" />
+          <UpcInputWithScanner value={codeUpc} onChange={setCodeUpc} />
         </div>
         <div>
           <label className="block text-sm text-gray-400 mb-1">Nom</label>
