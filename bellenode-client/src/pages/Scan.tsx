@@ -61,8 +61,8 @@ export default function Scan() {
     }
 
     setLines((prev) => [
-      ...prev,
       { tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: 1, nom, unknown },
+      ...prev,
     ]);
     setCodeInput('');
   }
@@ -109,7 +109,7 @@ export default function Scan() {
           } as ScanLine;
         }),
       );
-      setLines((prev) => [...prev, ...mapped]);
+      setLines((prev) => [...mapped, ...prev]);
       setBulkText('');
       setShowBulk(false);
       setMsg(`${mapped.length} ligne(s) importée(s).`);
@@ -137,52 +137,92 @@ export default function Scan() {
       setTimeout(() => navigate(`/batches/${result.batchId}`), 1500);
     } catch (e) {
       console.error(e);
-      setMsg('❌ Erreur lors de l\'envoi du batch.');
+      setMsg("❌ Erreur lors de l'envoi du batch.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const modeButton = (m: ScanModeString, label: string, color: string) => (
+  const modeButton = (m: ScanModeString, label: string, colorClass: string) => (
     <button
       type="button"
       onClick={() => {
         setMode(m);
         inputRef.current?.focus();
       }}
-      className={`px-4 py-2 rounded-md font-semibold border transition-colors ${
+      className={`flex-1 px-3 py-4 rounded-md text-base md:text-lg font-bold border transition-colors ${
         mode === m
-          ? `${color} text-white border-transparent`
-          : 'bg-bg-elevated text-gray-300 border-bg-border hover:bg-bg-border'
+          ? `${colorClass} text-white border-transparent shadow-lg`
+          : 'bg-bg-elevated text-gray-400 border-bg-border active:bg-bg-border'
       }`}
+      style={{ minHeight: 56 }}
     >
       {label}
     </button>
   );
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h2 className="text-3xl font-bold text-white">Scan</h2>
-        <p className="text-gray-400 mt-1">Ajoute, retire ou fixe des quantités. Utilise un lecteur USB ou tape les codes.</p>
+    <div className="space-y-4">
+      <header className="hidden md:block">
+        <h2 className="page-title">Scan</h2>
+        <p className="page-subtitle">
+          Ajoute, retire ou fixe des quantités. Scanner USB/BT ou saisie manuelle.
+        </p>
       </header>
 
       {msg && (
-        <div className="card p-3 text-sm border-accent/50 text-gray-200">{msg}</div>
+        <div className="card p-3 text-sm text-gray-200 border-accent/50">{msg}</div>
       )}
 
-      <section className="card p-5 space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-gray-400 mr-1">Mode:</span>
+      {/* Mode + input sticky au top sur mobile */}
+      <section className="card p-4 space-y-3 md:sticky md:top-0 md:z-10">
+        <div className="flex gap-2">
           {modeButton('+', '+ Ajouter', 'bg-green-600')}
           {modeButton('-', '− Retirer', 'bg-red-600')}
           {modeButton('=', '= Fixer', 'bg-accent')}
-          <div className="ml-auto flex gap-2">
-            <button className="btn btn-ghost text-sm" onClick={() => setShowBulk((s) => !s)}>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            placeholder="Scanne ou tape un code UPC..."
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            onKeyDown={handleKey}
+            className="flex-1 font-mono text-lg"
+            style={{ minHeight: 52 }}
+          />
+          <button
+            className="btn btn-primary px-5"
+            style={{ minHeight: 52 }}
+            onClick={() => addLine(codeInput)}
+          >
+            +
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 justify-between items-center">
+          <div className="text-xs text-gray-500 flex gap-3 flex-wrap">
+            <span>Entrée = ajoute</span>
+            <span className="hidden sm:inline">+/−/= = change mode</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="btn btn-ghost text-xs px-3 py-1.5"
+              style={{ minHeight: 36 }}
+              onClick={() => setShowBulk((s) => !s)}
+            >
               {showBulk ? 'Masquer texte' : 'Coller texte'}
             </button>
             <button
-              className="btn btn-ghost text-sm"
+              className="btn btn-ghost text-xs px-3 py-1.5"
+              style={{ minHeight: 36 }}
               onClick={() => {
                 if (lines.length === 0) return;
                 if (confirm('Effacer toutes les lignes?')) setLines([]);
@@ -194,9 +234,9 @@ export default function Scan() {
         </div>
 
         {showBulk && (
-          <div className="space-y-2">
+          <div className="space-y-2 pt-2 border-t border-bg-border">
             <textarea
-              rows={6}
+              rows={5}
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
               className="w-full font-mono text-sm"
@@ -207,98 +247,125 @@ export default function Scan() {
             </button>
           </div>
         )}
-
-        <div className="flex gap-2">
-          <input
-            ref={inputRef}
-            autoFocus
-            type="text"
-            placeholder="Scanne ou tape un code UPC..."
-            value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)}
-            onKeyDown={handleKey}
-            className="flex-1 font-mono text-lg"
-          />
-          <button className="btn btn-primary" onClick={() => addLine(codeInput)}>
-            Ajouter
-          </button>
-        </div>
-
-        <div className="flex gap-4 text-xs text-gray-500">
-          <span>💡 Entrée = ajoute la ligne</span>
-          <span>💡 Tape +, − ou = pour changer de mode</span>
-          <span>💡 Une caisse est convertie automatiquement en bouteilles</span>
-        </div>
       </section>
 
+      {/* Liste des lignes — cards sur mobile, table sur desktop */}
       <section className="card">
-        <div className="px-5 py-3 border-b border-bg-border flex items-center justify-between">
-          <h3 className="font-semibold">Lignes du batch ({lines.length})</h3>
+        <div className="px-4 py-3 border-b border-bg-border flex items-center justify-between">
+          <h3 className="font-semibold text-base">Lignes ({lines.length})</h3>
           {lines.length > 0 && (
-            <div className="text-sm text-gray-400">
-              + {lines.filter((l) => l.mode === '+').length} · − {lines.filter((l) => l.mode === '-').length} · = {lines.filter((l) => l.mode === '=').length}
+            <div className="text-xs text-gray-400 flex gap-2">
+              <span className="text-green-400">+{lines.filter((l) => l.mode === '+').length}</span>
+              <span className="text-red-400">−{lines.filter((l) => l.mode === '-').length}</span>
+              <span className="text-accent">={lines.filter((l) => l.mode === '=').length}</span>
             </div>
           )}
         </div>
         {lines.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">Aucune ligne pour l'instant.</div>
+          <div className="p-8 text-center text-gray-500 text-sm">Aucune ligne pour l'instant.</div>
         ) : (
-          <table className="table-default">
-            <thead>
-              <tr>
-                <th className="w-16">Mode</th>
-                <th>Code</th>
-                <th>Produit</th>
-                <th className="w-24 text-right">Qté</th>
-                <th className="w-16"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile: liste de cards */}
+            <ul className="md:hidden divide-y divide-bg-border">
               {lines.map((l) => (
-                <tr key={l.tempId}>
-                  <td>
-                    <span
-                      className={`badge ${
-                        l.mode === '+' ? 'badge-green' : l.mode === '-' ? 'badge-red' : 'badge-blue'
-                      }`}
-                    >
-                      {l.mode}
-                    </span>
-                  </td>
-                  <td className="font-mono text-xs text-gray-400">{l.code}</td>
-                  <td>
-                    {l.unknown ? (
-                      <span className="badge badge-yellow">Non référencé</span>
-                    ) : (
-                      <span className="text-gray-200">{l.nom}</span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    <input
-                      type="number"
-                      min={1}
-                      value={l.quantite}
-                      onChange={(e) => updateQty(l.tempId, parseInt(e.target.value) || 1)}
-                      className="w-20 text-right"
-                    />
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => removeLine(l.tempId)}
-                      className="text-gray-500 hover:text-red-400 text-xl leading-none"
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
+                <li key={l.tempId} className="p-3 flex items-start gap-3">
+                  <span
+                    className={`badge text-base px-2 py-1 ${
+                      l.mode === '+' ? 'badge-green' : l.mode === '-' ? 'badge-red' : 'badge-blue'
+                    }`}
+                  >
+                    {l.mode}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-xs text-gray-500 truncate">{l.code}</div>
+                    <div className="text-sm text-gray-100 truncate">
+                      {l.unknown ? (
+                        <span className="badge badge-yellow">Non référencé</span>
+                      ) : (
+                        l.nom
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={l.quantite}
+                    onChange={(e) => updateQty(l.tempId, parseInt(e.target.value) || 1)}
+                    className="w-16 text-right text-sm"
+                    style={{ minHeight: 40 }}
+                  />
+                  <button
+                    onClick={() => removeLine(l.tempId)}
+                    aria-label="Supprimer"
+                    className="w-10 h-10 flex items-center justify-center text-gray-500 active:text-red-400 text-xl"
+                  >
+                    ×
+                  </button>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <table className="table-default">
+                <thead>
+                  <tr>
+                    <th className="w-16">Mode</th>
+                    <th>Code</th>
+                    <th>Produit</th>
+                    <th className="w-24 text-right">Qté</th>
+                    <th className="w-16"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l) => (
+                    <tr key={l.tempId}>
+                      <td>
+                        <span
+                          className={`badge ${
+                            l.mode === '+' ? 'badge-green' : l.mode === '-' ? 'badge-red' : 'badge-blue'
+                          }`}
+                        >
+                          {l.mode}
+                        </span>
+                      </td>
+                      <td className="font-mono text-xs text-gray-400">{l.code}</td>
+                      <td>
+                        {l.unknown ? (
+                          <span className="badge badge-yellow">Non référencé</span>
+                        ) : (
+                          <span className="text-gray-200">{l.nom}</span>
+                        )}
+                      </td>
+                      <td className="text-right">
+                        <input
+                          type="number"
+                          min={1}
+                          value={l.quantite}
+                          onChange={(e) => updateQty(l.tempId, parseInt(e.target.value) || 1)}
+                          className="w-20 text-right"
+                        />
+                      </td>
+                      <td>
+                        <button
+                          onClick={() => removeLine(l.tempId)}
+                          className="w-10 h-10 text-gray-500 hover:text-red-400 text-xl"
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
-      <section className="card p-5 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className="card p-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm text-gray-400 mb-1">Utilisateur</label>
             <input
@@ -306,24 +373,26 @@ export default function Scan() {
               placeholder="Ton nom"
               value={user}
               onChange={(e) => setUser(e.target.value)}
+              autoComplete="name"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Note (optionnel)</label>
+            <label className="block text-sm text-gray-400 mb-1">Note</label>
             <input
               type="text"
-              placeholder="Ex: réception livraison SAQ, inventaire hebdo..."
+              placeholder="Ex: livraison SAQ, inventaire..."
               value={note}
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
         </div>
         <button
-          className="btn btn-primary w-full text-base py-3"
+          className="btn btn-primary w-full text-base font-bold"
+          style={{ minHeight: 56 }}
           onClick={submit}
           disabled={submitting || lines.length === 0}
         >
-          {submitting ? 'Envoi en cours...' : `Valider le batch (${lines.length} ligne${lines.length > 1 ? 's' : ''})`}
+          {submitting ? 'Envoi...' : `Valider (${lines.length} ligne${lines.length > 1 ? 's' : ''})`}
         </button>
       </section>
     </div>

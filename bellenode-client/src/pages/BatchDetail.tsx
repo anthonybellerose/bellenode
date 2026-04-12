@@ -19,20 +19,20 @@ export default function BatchDetail() {
   if (!batch) return <div className="text-gray-500">Batch introuvable.</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <header>
-        <Link to="/batches" className="text-sm text-accent hover:text-accent-hover">
-          ← Retour à l'historique
+        <Link to="/batches" className="text-sm text-accent active:text-accent-hover">
+          ← Retour
         </Link>
-        <h2 className="text-3xl font-bold text-white mt-2">Batch #{batch.id}</h2>
-        <p className="text-gray-400 mt-1">
+        <h2 className="page-title mt-1 md:mt-2">Batch #{batch.id}</h2>
+        <p className="page-subtitle">
           {new Date(batch.createdAt).toLocaleString('fr-CA')}
-          {batch.createdBy && <> · par {batch.createdBy}</>}
+          {batch.createdBy && <> · {batch.createdBy}</>}
           {batch.note && <> · {batch.note}</>}
         </p>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="Lignes" value={batch.lignesOps} />
         <Stat label="Produits" value={batch.produitsTouches} />
         <Stat label="Ajouts" value={batch.totalAjouts} tone="green" />
@@ -40,47 +40,78 @@ export default function BatchDetail() {
       </div>
 
       <section className="card overflow-hidden">
-        <div className="px-5 py-3 border-b border-bg-border">
-          <h3 className="font-semibold">Opérations ({batch.operations.length})</h3>
+        <div className="px-4 md:px-5 py-3 border-b border-bg-border">
+          <h3 className="font-semibold text-sm md:text-base">
+            Opérations ({batch.operations.length})
+          </h3>
         </div>
-        <table className="table-default">
-          <thead>
-            <tr>
-              <th className="w-14">Mode</th>
-              <th>Code</th>
-              <th>Produit</th>
-              <th className="text-right">Qté</th>
-              <th className="text-right">Avant</th>
-              <th className="text-right">Après</th>
-            </tr>
-          </thead>
-          <tbody>
-            {batch.operations.map((op) => (
-              <tr key={op.id}>
-                <td>
-                  <span
-                    className={`badge ${
-                      op.mode === 'Add' ? 'badge-green' : op.mode === 'Remove' ? 'badge-red' : 'badge-blue'
-                    }`}
-                  >
-                    {op.mode === 'Add' ? '+' : op.mode === 'Remove' ? '−' : '='}
-                  </span>
-                </td>
-                <td className="font-mono text-xs text-gray-400">{op.code}</td>
-                <td>
-                  {op.isReferenced ? (
-                    op.nom ?? '—'
-                  ) : (
-                    <span className="badge badge-yellow">Non référencé</span>
-                  )}
-                </td>
-                <td className="text-right">{op.quantite}</td>
-                <td className="text-right text-gray-500">{op.qtyAvant}</td>
-                <td className="text-right font-semibold">{op.qtyApres}</td>
+        {/* Mobile: liste */}
+        <ul className="md:hidden divide-y divide-bg-border">
+          {batch.operations.map((op) => (
+            <li key={op.id} className="p-3 flex items-start gap-3">
+              <span
+                className={`badge text-base px-2 py-1 ${
+                  op.mode === 'Add' ? 'badge-green' : op.mode === 'Remove' ? 'badge-red' : 'badge-blue'
+                }`}
+              >
+                {op.mode === 'Add' ? '+' : op.mode === 'Remove' ? '−' : '='}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-gray-100 truncate">
+                  {op.isReferenced ? op.nom ?? '—' : <span className="badge badge-yellow">Non référencé</span>}
+                </div>
+                <div className="font-mono text-[10px] text-gray-500 truncate">{op.code}</div>
+              </div>
+              <div className="text-right text-xs flex-shrink-0">
+                <div className="text-base font-bold">
+                  {op.qtyAvant} → <span className="text-accent">{op.qtyApres}</span>
+                </div>
+                <div className="text-gray-500">qté {op.quantite}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {/* Desktop: table */}
+        <div className="hidden md:block">
+          <table className="table-default">
+            <thead>
+              <tr>
+                <th className="w-14">Mode</th>
+                <th>Code</th>
+                <th>Produit</th>
+                <th className="text-right">Qté</th>
+                <th className="text-right">Avant</th>
+                <th className="text-right">Après</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {batch.operations.map((op) => (
+                <tr key={op.id}>
+                  <td>
+                    <span
+                      className={`badge ${
+                        op.mode === 'Add' ? 'badge-green' : op.mode === 'Remove' ? 'badge-red' : 'badge-blue'
+                      }`}
+                    >
+                      {op.mode === 'Add' ? '+' : op.mode === 'Remove' ? '−' : '='}
+                    </span>
+                  </td>
+                  <td className="font-mono text-xs text-gray-400">{op.code}</td>
+                  <td>
+                    {op.isReferenced ? (
+                      op.nom ?? '—'
+                    ) : (
+                      <span className="badge badge-yellow">Non référencé</span>
+                    )}
+                  </td>
+                  <td className="text-right">{op.quantite}</td>
+                  <td className="text-right text-gray-500">{op.qtyAvant}</td>
+                  <td className="text-right font-semibold">{op.qtyApres}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

@@ -39,54 +39,88 @@ export default function NonReferenced() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h2 className="text-3xl font-bold text-white">Produits non référencés</h2>
-        <p className="text-gray-400 mt-1">Codes scannés qui ne sont pas encore dans le catalogue — {items.length}</p>
+    <div className="space-y-4 md:space-y-6">
+      <header className="hidden md:block">
+        <h2 className="page-title">Non référencés</h2>
+        <p className="page-subtitle">
+          Codes scannés qui ne sont pas encore dans le catalogue — {items.length}
+        </p>
       </header>
 
       <section className="card overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-gray-500 text-sm">
             Aucun produit non référencé. Tout ce qui est scanné est connu ! 🎉
           </div>
         ) : (
-          <table className="table-default">
-            <thead>
-              <tr>
-                <th>Code UPC</th>
-                <th className="text-right">Quantité en stock</th>
-                <th>Dernière maj</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile: cards */}
+            <ul className="md:hidden divide-y divide-bg-border">
               {items.map((item) => (
-                <tr key={item.id}>
-                  <td className="font-mono text-gray-300">{item.code}</td>
-                  <td className="text-right font-semibold text-yellow-400">{item.quantite}</td>
-                  <td className="text-gray-500 text-xs">
-                    {new Date(item.updatedAt).toLocaleString('fr-CA')}
-                  </td>
-                  <td className="text-right">
-                    <button
-                      className="btn btn-primary text-xs px-3 py-1"
-                      onClick={() => {
-                        setAdding(item);
-                        setNom('');
-                        setPrix('');
-                        setCodeSaq('');
-                      }}
-                    >
-                      Ajouter au catalogue
-                    </button>
-                  </td>
-                </tr>
+                <li key={item.id} className="p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-sm text-gray-200 truncate">{item.code}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {new Date(item.updatedAt).toLocaleString('fr-CA')}
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-yellow-400">{item.quantite}</div>
+                  </div>
+                  <button
+                    className="btn btn-primary text-sm w-full mt-2"
+                    onClick={() => {
+                      setAdding(item);
+                      setNom('');
+                      setPrix('');
+                      setCodeSaq('');
+                    }}
+                  >
+                    + Ajouter au catalogue
+                  </button>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <table className="table-default">
+                <thead>
+                  <tr>
+                    <th>Code UPC</th>
+                    <th className="text-right">Quantité en stock</th>
+                    <th>Dernière maj</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td className="font-mono text-gray-300">{item.code}</td>
+                      <td className="text-right font-semibold text-yellow-400">{item.quantite}</td>
+                      <td className="text-gray-500 text-xs">
+                        {new Date(item.updatedAt).toLocaleString('fr-CA')}
+                      </td>
+                      <td className="text-right">
+                        <button
+                          className="btn btn-primary text-xs px-3 py-1"
+                          onClick={() => {
+                            setAdding(item);
+                            setNom('');
+                            setPrix('');
+                            setCodeSaq('');
+                          }}
+                        >
+                          Ajouter au catalogue
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

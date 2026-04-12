@@ -41,11 +41,11 @@ export default function Products() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6">
+      <header className="hidden md:flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-white">Produits</h2>
-          <p className="text-gray-400 mt-1">Catalogue des bouteilles — {products.length} produit(s)</p>
+          <h2 className="page-title">Produits</h2>
+          <p className="page-subtitle">Catalogue des bouteilles — {products.length} produit(s)</p>
         </div>
         <button
           className="btn btn-primary"
@@ -58,13 +58,25 @@ export default function Products() {
         </button>
       </header>
 
-      <input
-        type="search"
-        placeholder="Rechercher par nom, UPC, code SAQ..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full md:w-96"
-      />
+      <div className="flex gap-2">
+        <input
+          type="search"
+          placeholder="Rechercher nom, UPC, SAQ..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 md:w-96 md:flex-initial"
+          autoComplete="off"
+        />
+        <button
+          className="btn btn-primary md:hidden px-4"
+          onClick={() => {
+            setEditing(null);
+            setShowForm(true);
+          }}
+        >
+          +
+        </button>
+      </div>
 
       <section className="card overflow-hidden">
         {loading ? (
@@ -72,46 +84,86 @@ export default function Products() {
         ) : products.length === 0 ? (
           <div className="p-8 text-center text-gray-500">Aucun produit.</div>
         ) : (
-          <table className="table-default">
-            <thead>
-              <tr>
-                <th>UPC</th>
-                <th>Nom</th>
-                <th>Code SAQ</th>
-                <th className="text-right">Prix</th>
-                <th className="w-24"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile: cards */}
+            <ul className="md:hidden divide-y divide-bg-border">
               {products.map((p) => (
-                <tr key={p.id}>
-                  <td className="font-mono text-xs text-gray-400">{p.codeUpc}</td>
-                  <td className="text-gray-100">{p.nom}</td>
-                  <td className="font-mono text-xs text-gray-400">{p.codeSaq ?? '—'}</td>
-                  <td className="text-right text-gray-300">
-                    {p.prix != null ? `${p.prix.toFixed(2)} $` : '—'}
-                  </td>
-                  <td className="text-right">
-                    <button
-                      className="text-accent hover:text-accent-hover text-xs mr-2"
-                      onClick={() => {
-                        setEditing(p);
-                        setShowForm(true);
-                      }}
-                    >
-                      Éditer
-                    </button>
-                    <button
-                      className="text-red-400 hover:text-red-300 text-xs"
-                      onClick={() => remove(p)}
-                    >
-                      Suppr
-                    </button>
-                  </td>
-                </tr>
+                <li key={p.id} className="p-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-100 truncate">{p.nom}</div>
+                    <div className="font-mono text-[10px] text-gray-500 truncate">
+                      UPC {p.codeUpc} · SAQ {p.codeSaq ?? '—'}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-semibold text-gray-200">
+                      {p.prix != null ? `${p.prix.toFixed(2)}$` : '—'}
+                    </div>
+                    <div className="flex gap-2 mt-1 justify-end">
+                      <button
+                        className="text-accent text-xs px-2 py-1"
+                        onClick={() => {
+                          setEditing(p);
+                          setShowForm(true);
+                        }}
+                      >
+                        Éditer
+                      </button>
+                      <button
+                        className="text-red-400 text-xs px-2 py-1"
+                        onClick={() => remove(p)}
+                      >
+                        Suppr
+                      </button>
+                    </div>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <table className="table-default">
+                <thead>
+                  <tr>
+                    <th>UPC</th>
+                    <th>Nom</th>
+                    <th>Code SAQ</th>
+                    <th className="text-right">Prix</th>
+                    <th className="w-24"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((p) => (
+                    <tr key={p.id}>
+                      <td className="font-mono text-xs text-gray-400">{p.codeUpc}</td>
+                      <td className="text-gray-100">{p.nom}</td>
+                      <td className="font-mono text-xs text-gray-400">{p.codeSaq ?? '—'}</td>
+                      <td className="text-right text-gray-300">
+                        {p.prix != null ? `${p.prix.toFixed(2)} $` : '—'}
+                      </td>
+                      <td className="text-right">
+                        <button
+                          className="text-accent hover:text-accent-hover text-xs mr-2"
+                          onClick={() => {
+                            setEditing(p);
+                            setShowForm(true);
+                          }}
+                        >
+                          Éditer
+                        </button>
+                        <button
+                          className="text-red-400 hover:text-red-300 text-xs"
+                          onClick={() => remove(p)}
+                        >
+                          Suppr
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

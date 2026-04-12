@@ -39,16 +39,16 @@ export default function Mappings() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-white">Mappings caisses</h2>
-          <p className="text-gray-400 mt-1">
-            Codes de caisses et leur équivalent en bouteilles individuelles — {mappings.length}
+    <div className="space-y-4 md:space-y-6">
+      <header className="flex items-center justify-between gap-3">
+        <div className="hidden md:block">
+          <h2 className="page-title">Mappings caisses</h2>
+          <p className="page-subtitle">
+            Codes de caisses et leur équivalent en bouteilles — {mappings.length}
           </p>
         </div>
         <button
-          className="btn btn-primary"
+          className="btn btn-primary w-full md:w-auto"
           onClick={() => {
             setEditing(null);
             setShowForm(true);
@@ -62,46 +62,93 @@ export default function Mappings() {
         {loading ? (
           <div className="p-8 text-center text-gray-400">Chargement...</div>
         ) : mappings.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">Aucun mapping défini.</div>
+          <div className="p-8 text-center text-gray-500 text-sm">Aucun mapping défini.</div>
         ) : (
-          <table className="table-default">
-            <thead>
-              <tr>
-                <th>Code caisse</th>
-                <th>Code bouteille</th>
-                <th>Nom bouteille</th>
-                <th className="text-right">Quantité</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Mobile: cards */}
+            <ul className="md:hidden divide-y divide-bg-border">
               {mappings.map((m) => (
-                <tr key={m.id}>
-                  <td className="font-mono text-xs text-gray-300">{m.codeCaisse}</td>
-                  <td className="font-mono text-xs text-gray-400">{m.codeUnite}</td>
-                  <td className="text-gray-200">{m.nomUnite ?? <span className="text-gray-600">—</span>}</td>
-                  <td className="text-right font-semibold text-accent">× {m.quantite}</td>
-                  <td className="text-right">
-                    <button
-                      className="text-accent hover:text-accent-hover text-xs mr-2"
-                      onClick={() => {
-                        setEditing(m);
-                        setShowForm(true);
-                      }}
-                    >
-                      Éditer
-                    </button>
-                    <button
-                      className="text-red-400 hover:text-red-300 text-xs"
-                      onClick={() => remove(m)}
-                    >
-                      Suppr
-                    </button>
-                  </td>
-                </tr>
+                <li key={m.id} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-[11px] text-gray-300 truncate">
+                        📦 {m.codeCaisse}
+                      </div>
+                      <div className="font-mono text-[11px] text-gray-500 truncate">
+                        → {m.codeUnite}
+                      </div>
+                      <div className="text-sm text-gray-200 truncate mt-0.5">
+                        {m.nomUnite ?? <span className="text-gray-600">Inconnu</span>}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-2xl font-bold text-accent">× {m.quantite}</div>
+                      <div className="flex gap-2 justify-end mt-1">
+                        <button
+                          className="text-accent text-xs px-2 py-1"
+                          onClick={() => {
+                            setEditing(m);
+                            setShowForm(true);
+                          }}
+                        >
+                          Éditer
+                        </button>
+                        <button
+                          className="text-red-400 text-xs px-2 py-1"
+                          onClick={() => remove(m)}
+                        >
+                          Suppr
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            {/* Desktop: table */}
+            <div className="hidden md:block">
+              <table className="table-default">
+                <thead>
+                  <tr>
+                    <th>Code caisse</th>
+                    <th>Code bouteille</th>
+                    <th>Nom bouteille</th>
+                    <th className="text-right">Quantité</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mappings.map((m) => (
+                    <tr key={m.id}>
+                      <td className="font-mono text-xs text-gray-300">{m.codeCaisse}</td>
+                      <td className="font-mono text-xs text-gray-400">{m.codeUnite}</td>
+                      <td className="text-gray-200">
+                        {m.nomUnite ?? <span className="text-gray-600">—</span>}
+                      </td>
+                      <td className="text-right font-semibold text-accent">× {m.quantite}</td>
+                      <td className="text-right">
+                        <button
+                          className="text-accent hover:text-accent-hover text-xs mr-2"
+                          onClick={() => {
+                            setEditing(m);
+                            setShowForm(true);
+                          }}
+                        >
+                          Éditer
+                        </button>
+                        <button
+                          className="text-red-400 hover:text-red-300 text-xs"
+                          onClick={() => remove(m)}
+                        >
+                          Suppr
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

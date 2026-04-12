@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '📊' },
@@ -10,21 +11,33 @@ const navItems = [
 ];
 
 export default function Layout() {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
+
+  const currentItem = navItems.find((i) =>
+    i.to === '/' ? location.pathname === '/' : location.pathname.startsWith(i.to),
+  );
+
   return (
-    <div className="flex h-screen bg-bg">
-      <aside className="w-60 bg-bg-soft border-r border-bg-border flex flex-col">
+    <div className="flex min-h-screen bg-bg">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-60 bg-bg-soft border-r border-bg-border flex-col fixed inset-y-0 left-0">
         <div className="px-5 py-5 border-b border-bg-border">
           <h1 className="text-2xl font-bold tracking-wider text-accent">BELLENODE</h1>
           <p className="text-xs text-gray-500 mt-1">Gestion d'inventaire</p>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                `flex items-center gap-3 px-3 py-3 rounded-md text-sm transition-colors ${
                   isActive
                     ? 'bg-accent text-white'
                     : 'text-gray-300 hover:bg-bg-elevated hover:text-white'
@@ -41,8 +54,88 @@ export default function Layout() {
           <div className="mt-1">bellenode.com</div>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
-        <div className="px-8 py-6 max-w-[1600px] mx-auto">
+
+      {/* Mobile header */}
+      <header className="md:hidden fixed top-0 inset-x-0 z-30 bg-bg-soft border-b border-bg-border h-14 flex items-center px-3 gap-3">
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Ouvrir le menu"
+          className="w-11 h-11 flex items-center justify-center rounded-md hover:bg-bg-elevated active:bg-bg-border"
+        >
+          <svg className="w-6 h-6 text-gray-200" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-gray-500 truncate">Bellenode</div>
+          <div className="text-base font-semibold text-white truncate leading-tight">
+            {currentItem ? (
+              <>
+                <span className="mr-1">{currentItem.icon}</span>
+                {currentItem.label}
+              </>
+            ) : (
+              'Chargement...'
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <div className="md:hidden fixed inset-0 z-40">
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setDrawerOpen(false)}
+            aria-hidden
+          />
+          <aside className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-bg-soft border-r border-bg-border flex flex-col">
+            <div className="px-5 py-5 border-b border-bg-border flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold tracking-wider text-accent">BELLENODE</h1>
+                <p className="text-xs text-gray-500 mt-1">Gestion d'inventaire</p>
+              </div>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Fermer"
+                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-4 rounded-md text-base transition-colors ${
+                      isActive
+                        ? 'bg-accent text-white'
+                        : 'text-gray-200 hover:bg-bg-elevated'
+                    }`
+                  }
+                >
+                  <span className="text-xl">{item.icon}</span>
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </nav>
+            <div className="p-4 border-t border-bg-border text-xs text-gray-500">
+              <div>v0.1.0 — MVP</div>
+              <div className="mt-1">bellenode.com</div>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 md:ml-60 pt-14 md:pt-0 overflow-x-hidden">
+        <div className="px-4 py-4 md:px-8 md:py-6 max-w-[1600px] mx-auto pb-20 md:pb-10">
           <Outlet />
         </div>
       </main>
