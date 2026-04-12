@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ProductsApi, ScanApi } from '../api/client';
 import type { RawOp, ScanModeString } from '../types';
+import BarcodeScanner from '../components/BarcodeScanner';
 
 interface ScanLine extends RawOp {
   nom?: string | null;
@@ -19,6 +20,8 @@ export default function Scan() {
   const [msg, setMsg] = useState<string | null>(null);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraSupported] = useState(() => typeof window !== 'undefined' && 'BarcodeDetector' in window);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -30,42 +33,45 @@ export default function Scan() {
     localStorage.setItem('bellenode.user', user);
   }, [user]);
 
-  async function addLine(code: string) {
-    const trimmed = code.trim();
-    if (!trimmed) return;
+  const addLine = useCallback(
+    async (code: string) => {
+      const trimmed = code.trim();
+      if (!trimmed) return;
 
-    const upper = trimmed.toUpperCase();
-    if (upper === '+' || upper === 'ADD') {
-      setMode('+');
-      setCodeInput('');
-      return;
-    }
-    if (upper === '-' || upper === 'REM') {
-      setMode('-');
-      setCodeInput('');
-      return;
-    }
-    if (upper === '=' || upper === 'SET') {
-      setMode('=');
-      setCodeInput('');
-      return;
-    }
+      const upper = trimmed.toUpperCase();
+      if (upper === '+' || upper === 'ADD') {
+        setMode('+');
+        setCodeInput('');
+        return;
+      }
+      if (upper === '-' || upper === 'REM') {
+        setMode('-');
+        setCodeInput('');
+        return;
+      }
+      if (upper === '=' || upper === 'SET') {
+        setMode('=');
+        setCodeInput('');
+        return;
+      }
 
-    let nom: string | null = null;
-    let unknown = false;
-    try {
-      const p = await ProductsApi.byUpc(trimmed);
-      nom = p.nom;
-    } catch {
-      unknown = true;
-    }
+      let nom: string | null = null;
+      let unknown = false;
+      try {
+        const p = await ProductsApi.byUpc(trimmed);
+        nom = p.nom;
+      } catch {
+        unknown = true;
+      }
 
-    setLines((prev) => [
-      { tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: 1, nom, unknown },
-      ...prev,
-    ]);
-    setCodeInput('');
-  }
+      setLines((prev) => [
+        { tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: 1, nom, unknown },
+        ...prev,
+      ]);
+      setCodeInput('');
+    },
+    [mode],
+  );
 
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
@@ -163,10 +169,21 @@ export default function Scan() {
 
   return (
     <div className="space-y-4">
+      {cameraOpen && (
+        <BarcodeScanner
+          mode={mode}
+          onModeChange={setMode}
+          onDetect={(code) => {
+            addLine(code);
+          }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
+
       <header className="hidden md:block">
         <h2 className="page-title">Scan</h2>
         <p className="page-subtitle">
-          Ajoute, retire ou fixe des quantités. Scanner USB/BT ou saisie manuelle.
+          Ajoute, retire ou fixe des quantités. Scanner USB/BT, caméra ou saisie manuelle.
         </p>
       </header>
 
@@ -198,6 +215,16 @@ export default function Scan() {
             className="flex-1 font-mono text-lg"
             style={{ minHeight: 52 }}
           />
+          <button
+            type="button"
+            onClick={() => setCameraOpen(true)}
+            aria-label="Scanner avec la caméra"
+            title={cameraSupported ? 'Scanner avec la caméra' : 'Caméra non supportée sur ce navigateur'}
+            className={`btn px-4 ${cameraSupported ? 'btn-secondary' : 'btn-ghost opacity-60'}`}
+            style={{ minHeight: 52 }}
+          >
+            📷
+          </button>
           <button
             className="btn btn-primary px-5"
             style={{ minHeight: 52 }}
