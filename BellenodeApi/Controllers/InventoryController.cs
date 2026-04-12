@@ -71,6 +71,17 @@ public class InventoryController : ControllerBase
         var distinctNonReferenced = await _db.Inventory.CountAsync(i => !i.IsReferenced);
         var lastUpdate = await _db.Inventory.MaxAsync(i => (DateTime?)i.UpdatedAt);
 
+        var productsWithObjectif = await _db.Products.Where(p => p.ObjectifQty != null && p.ObjectifQty > 0).ToListAsync();
+        var invMap = await _db.Inventory.ToDictionaryAsync(i => i.Code, i => i.Quantite);
+        var bas = 0;
+        var rupture = 0;
+        foreach (var p in productsWithObjectif)
+        {
+            var qty = invMap.TryGetValue(p.CodeUpc, out var q) ? q : 0;
+            if (qty == 0) rupture++;
+            else if (qty < p.ObjectifQty) bas++;
+        }
+
         return Ok(new
         {
             totalReferenced,
@@ -79,7 +90,10 @@ public class InventoryController : ControllerBase
             distinctNonReferenced,
             lastUpdate,
             totalProducts = await _db.Products.CountAsync(),
-            totalBatches = await _db.ScanBatches.CountAsync()
+            totalBatches = await _db.ScanBatches.CountAsync(),
+            stockBas = bas,
+            stockRupture = rupture,
+            stockCibles = productsWithObjectif.Count
         });
     }
 
@@ -91,5 +105,44 @@ public class InventoryController : ControllerBase
             .OrderBy(i => i.Code)
             .ToListAsync();
         return Ok(items);
+    }
+
+    [HttpGet("objectifs")]
+    public async Task<IActionResult> Objectifs([FromQuery] string? status = null)
+    {
+        var products = await _db.Products.OrderBy(p => p.Nom).ToListAsync();
+        var inv = await _db.Inventory.ToDictionaryAsync(i => i.Code, i => i.Quantite);
+
+        var rows = products.Select(p =>
+        {
+            var qty = inv.TryGetValue(p.CodeUpc, out var q) ? q : 0;
+            var objectif = p.ObjectifQty ?? 0;
+            var manque = Math.Max(0, objectif - qty);
+            string statut;
+            if (objectif == 0) statut = "ignore";
+            else if (qty == 0) statut = "rupture";
+            else if (qty < objectif) statut = "bas";
+            else statut = "ok";
+
+            return new
+            {
+                productId = p.Id,
+                code = p.CodeUpc,
+                nom = p.Nom,
+                codeSaq = p.CodeSaq,
+                prix = p.Prix,
+                qtyActuelle = qty,
+                objectifQty = p.ObjectifQty,
+                manque,
+                statut
+            };
+        }).ToList();
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            rows = rows.Where(r => r.statut == status).ToList();
+        }
+
+        return Ok(rows);
     }
 }

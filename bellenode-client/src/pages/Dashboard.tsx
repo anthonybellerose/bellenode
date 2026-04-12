@@ -42,12 +42,42 @@ export default function Dashboard() {
         <div className="text-gray-400">Chargement...</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <StatCard label="Produits référencés" value={summary?.totalReferenced ?? 0} sub={`${summary?.distinctReferenced ?? 0} codes`} />
             <StatCard label="Non référencés" value={summary?.totalNonReferenced ?? 0} sub={`${summary?.distinctNonReferenced ?? 0} codes`} tone="yellow" />
             <StatCard label="Catalogue" value={summary?.totalProducts ?? 0} sub="produits" />
             <StatCard label="Batches" value={summary?.totalBatches ?? 0} sub="historique" />
           </div>
+
+          {summary && (summary.stockBas > 0 || summary.stockRupture > 0) && (
+            <Link
+              to="/objectifs"
+              className="card block p-4 border-yellow-600/50 active:bg-bg-elevated"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">⚠</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-yellow-300">Alertes de stock</div>
+                  <div className="text-sm text-gray-400">
+                    {summary.stockRupture > 0 && (
+                      <span className="text-red-400 font-semibold">
+                        {summary.stockRupture} en rupture
+                      </span>
+                    )}
+                    {summary.stockRupture > 0 && summary.stockBas > 0 && ' · '}
+                    {summary.stockBas > 0 && (
+                      <span className="text-yellow-400 font-semibold">
+                        {summary.stockBas} sous la cible
+                      </span>
+                    )}
+                    {' · '}
+                    <span>{summary.stockCibles} produits avec objectif</span>
+                  </div>
+                </div>
+                <span className="text-accent text-xl">→</span>
+              </div>
+            </Link>
+          )}
 
           <section className="card">
             <div className="px-4 md:px-5 py-3 border-b border-bg-border flex items-center justify-between">

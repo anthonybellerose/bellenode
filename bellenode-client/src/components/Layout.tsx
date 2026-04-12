@@ -5,6 +5,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', icon: '📊' },
   { to: '/scan', label: 'Scan', icon: '📷' },
   { to: '/produits', label: 'Produits', icon: '🍾' },
+  { to: '/objectifs', label: 'Objectifs', icon: '🎯' },
   { to: '/batches', label: 'Historique', icon: '📋' },
   { to: '/non-referencer', label: 'Non référencés', icon: '❓' },
   { to: '/mappings', label: 'Caisses', icon: '📦' },

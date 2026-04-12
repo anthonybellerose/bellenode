@@ -7,6 +7,7 @@ import Batches from './pages/Batches';
 import BatchDetail from './pages/BatchDetail';
 import NonReferenced from './pages/NonReferenced';
 import Mappings from './pages/Mappings';
+import Objectifs from './pages/Objectifs';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="/scan" element={<Scan />} />
         <Route path="/produits" element={<Products />} />
+        <Route path="/objectifs" element={<Objectifs />} />
         <Route path="/batches" element={<Batches />} />
         <Route path="/batches/:id" element={<BatchDetail />} />
         <Route path="/non-referencer" element={<NonReferenced />} />

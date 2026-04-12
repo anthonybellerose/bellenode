@@ -7,6 +7,8 @@ import type {
   RawOp,
   ScanBatch,
   ScanBatchDetail,
+  ObjectifRow,
+  ObjectifStatut,
 } from '../types';
 
 const api = axios.create({
@@ -20,6 +22,8 @@ export const ProductsApi = {
   create: (p: Partial<Product>) => api.post<Product>('/products', p).then((r) => r.data),
   update: (id: number, p: Partial<Product>) => api.put<Product>(`/products/${id}`, p).then((r) => r.data),
   remove: (id: number) => api.delete(`/products/${id}`).then((r) => r.data),
+  setObjectif: (id: number, objectifQty: number | null) =>
+    api.patch(`/products/${id}/objectif`, { objectifQty }).then((r) => r.data),
 };
 
 export const InventoryApi = {
@@ -27,6 +31,8 @@ export const InventoryApi = {
     api.get<InventoryRow[]>('/inventory', { params: { search, referenced } }).then((r) => r.data),
   summary: () => api.get<InventorySummary>('/inventory/summary').then((r) => r.data),
   nonReferenced: () => api.get<InventoryRow[]>('/inventory/non-referenced').then((r) => r.data),
+  objectifs: (status?: ObjectifStatut) =>
+    api.get<ObjectifRow[]>('/inventory/objectifs', { params: { status } }).then((r) => r.data),
 };
 
 export const ScanApi = {

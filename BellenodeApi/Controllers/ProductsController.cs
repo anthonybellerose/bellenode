@@ -67,10 +67,25 @@ public class ProductsController : ControllerBase
         existing.CodeSaq = input.CodeSaq;
         existing.Prix = input.Prix;
         existing.UnitesParCaisse = input.UnitesParCaisse;
+        existing.ObjectifQty = input.ObjectifQty;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
         return Ok(existing);
+    }
+
+    public record ObjectifInput(int? ObjectifQty);
+
+    [HttpPatch("{id}/objectif")]
+    public async Task<IActionResult> SetObjectif(int id, [FromBody] ObjectifInput body)
+    {
+        var existing = await _db.Products.FindAsync(id);
+        if (existing is null) return NotFound();
+
+        existing.ObjectifQty = body.ObjectifQty;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return Ok(new { existing.Id, existing.CodeUpc, existing.ObjectifQty });
     }
 
     [HttpDelete("{id}")]

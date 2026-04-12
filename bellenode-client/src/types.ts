@@ -5,8 +5,23 @@ export interface Product {
   codeSaq?: string | null;
   prix?: number | null;
   unitesParCaisse?: number | null;
+  objectifQty?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ObjectifStatut = 'ok' | 'bas' | 'rupture' | 'ignore';
+
+export interface ObjectifRow {
+  productId: number;
+  code: string;
+  nom: string;
+  codeSaq?: string | null;
+  prix?: number | null;
+  qtyActuelle: number;
+  objectifQty?: number | null;
+  manque: number;
+  statut: ObjectifStatut;
 }
 
 export interface InventoryRow {
@@ -28,6 +43,9 @@ export interface InventorySummary {
   lastUpdate?: string | null;
   totalProducts: number;
   totalBatches: number;
+  stockBas: number;
+  stockRupture: number;
+  stockCibles: number;
 }
 
 export interface CaisseMapping {

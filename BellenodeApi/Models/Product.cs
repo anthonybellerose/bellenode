@@ -19,6 +19,8 @@ public class Product
 
     public int? UnitesParCaisse { get; set; }
 
+    public int? ObjectifQty { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
