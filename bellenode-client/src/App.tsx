@@ -17,6 +17,7 @@ import AdminRestaurants from './pages/Admin/AdminRestaurants';
 import AdminUsers from './pages/Admin/AdminUsers';
 import JoinRequests from './pages/Admin/JoinRequests';
 import Invites from './pages/Admin/Invites';
+import AdminEmployees from './pages/Admin/AdminEmployees';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
@@ -65,6 +66,9 @@ export default function App() {
         <Route path="/non-referencer" element={<NonReferenced />} />
         <Route path="/mappings" element={<Mappings />} />
 
+        <Route path="/admin/employees" element={
+          <RequireRestaurantAdmin><AdminEmployees /></RequireRestaurantAdmin>
+        }/>
         <Route path="/admin/join-requests" element={
           <RequireRestaurantAdmin><JoinRequests /></RequireRestaurantAdmin>
         } />

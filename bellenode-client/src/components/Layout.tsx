@@ -19,7 +19,7 @@ export default function Layout() {
           { to: '/produits', label: 'Produits', icon: '🍾' },
           { to: '/objectifs', label: 'Objectifs', icon: '🎯' },
           { to: '/non-referencer', label: 'Non référencés', icon: '❓' },
-          { to: '/mappings', label: 'Caisses', icon: '📦' },
+          { to: '/admin/employees', label: 'Employés', icon: '👥' },
           { to: '/admin/join-requests', label: 'Demandes', icon: '🔔' },
           { to: '/admin/invites', label: 'Invitations', icon: '🔗' },
         ]
