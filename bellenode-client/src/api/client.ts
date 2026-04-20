@@ -132,3 +132,13 @@ export const PublicApi = {
   registerWithInvite: (data: { email: string; nom: string; password: string; token: string }) =>
     api.post('/auth/register-invite', data).then((r) => r.data),
 };
+
+export const CommandesApi = {
+  getConfig: () => api.get<import('../types').CommandeConfig>('/commandes/config').then(r => r.data),
+  updateConfig: (data: import('../types').CommandeConfig) => api.put('/commandes/config', data).then(r => r.data),
+  list: () => api.get<import('../types').CommandeSummary[]>('/commandes').then(r => r.data),
+  get: (id: number) => api.get<import('../types').CommandeDetail>(`/commandes/${id}`).then(r => r.data),
+  create: (data: { note?: string; items: { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number }[] }) =>
+    api.post<{ id: number; nbItems: number; totalBtls: number }>('/commandes', data).then(r => r.data),
+  remove: (id: number) => api.delete(`/commandes/${id}`).then(r => r.data),
+};

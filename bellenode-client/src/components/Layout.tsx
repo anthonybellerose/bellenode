@@ -15,6 +15,7 @@ export default function Layout() {
     { to: '/scan', label: 'Scan', icon: '📷' },
     { to: '/inventaire', label: 'Inventaire', icon: '📦' },
     { to: '/batches', label: 'Historique', icon: '📋' },
+    { to: '/commandes', label: 'Commandes', icon: '📄' },
     ...(isRestaurantAdmin
       ? [
           { to: '/produits', label: 'Produits', icon: '🍾' },

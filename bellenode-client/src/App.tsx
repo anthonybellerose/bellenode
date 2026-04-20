@@ -18,6 +18,8 @@ import AdminUsers from './pages/Admin/AdminUsers';
 import JoinRequests from './pages/Admin/JoinRequests';
 import Invites from './pages/Admin/Invites';
 import Inventaire from './pages/Inventaire';
+import Commandes from './pages/Commandes';
+import CommandeDetail from './pages/CommandeDetail';
 import AdminEmployees from './pages/Admin/AdminEmployees';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -67,6 +69,8 @@ export default function App() {
         <Route path="/batches/:id" element={<BatchDetail />} />
         <Route path="/non-referencer" element={<NonReferenced />} />
         <Route path="/mappings" element={<Mappings />} />
+        <Route path="/commandes" element={<Commandes />} />
+        <Route path="/commandes/:id" element={<CommandeDetail />} />
 
         <Route path="/admin/employees" element={
           <RequireRestaurantAdmin><AdminEmployees /></RequireRestaurantAdmin>

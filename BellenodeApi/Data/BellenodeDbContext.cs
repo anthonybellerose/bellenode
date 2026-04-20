@@ -18,6 +18,9 @@ public class BellenodeDbContext : DbContext
     public DbSet<RestaurantObjectif> RestaurantObjectifs => Set<RestaurantObjectif>();
     public DbSet<JoinRequest> JoinRequests => Set<JoinRequest>();
     public DbSet<InviteToken> InviteTokens => Set<InviteToken>();
+    public DbSet<CommandeConfig> CommandeConfigs => Set<CommandeConfig>();
+    public DbSet<CommandeSAQ> CommandesSAQ => Set<CommandeSAQ>();
+    public DbSet<CommandeSAQItem> CommandeSAQItems => Set<CommandeSAQItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -76,5 +79,15 @@ public class BellenodeDbContext : DbContext
             .HasOne(i => i.Restaurant).WithMany().HasForeignKey(i => i.RestaurantId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<InviteToken>()
             .HasIndex(i => i.Token).IsUnique();
+
+        modelBuilder.Entity<CommandeConfig>()
+            .HasIndex(c => c.RestaurantId)
+            .IsUnique();
+
+        modelBuilder.Entity<CommandeSAQ>()
+            .HasMany(c => c.Items)
+            .WithOne(i => i.Commande)
+            .HasForeignKey(i => i.CommandeId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

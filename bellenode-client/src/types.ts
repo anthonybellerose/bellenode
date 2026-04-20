@@ -129,3 +129,37 @@ export interface ScanBatchDetail extends ScanBatch {
     qtyApres: number;
   }[];
 }
+
+export interface CommandeConfig {
+  numeroClient?: string | null;
+  telephone?: string | null;
+  nomEtablissement?: string | null;
+  courriel?: string | null;
+  responsable?: string | null;
+}
+
+export interface CommandeSummary {
+  id: number;
+  createdAt: string;
+  createdBy?: string | null;
+  note?: string | null;
+  nbItems: number;
+  totalBtls: number;
+}
+
+export interface CommandeItemType {
+  id: number;
+  codeSaq: string;
+  nomProduit: string;
+  volume?: string | null;
+  quantite: number;
+}
+
+export interface CommandeDetail {
+  id: number;
+  createdAt: string;
+  createdBy?: string | null;
+  note?: string | null;
+  config: CommandeConfig;
+  items: CommandeItemType[];
+}
