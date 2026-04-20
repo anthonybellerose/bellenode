@@ -200,31 +200,33 @@ export default function Scan() {
         </div>
 
         <div className="flex gap-2 items-stretch">
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="text"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            placeholder="Scanne ou tape un code UPC..."
-            value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)}
-            onKeyDown={handleKey}
-            className="flex-1 font-mono text-lg"
-          />
+          <div className="relative flex-1">
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              placeholder="Scanne ou tape un code UPC..."
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value)}
+              onKeyDown={handleKey}
+              className="w-full font-mono text-lg pr-12"
+            />
+            <button
+              type="button"
+              onClick={() => setCameraOpen(true)}
+              aria-label="Scanner avec la caméra"
+              className={`absolute right-0 top-0 h-full px-3 flex items-center justify-center text-xl transition-colors ${cameraSupported ? 'text-gray-400 hover:text-white' : 'text-gray-700 cursor-not-allowed'}`}
+              disabled={!cameraSupported}
+            >
+              📷
+            </button>
+          </div>
           <button
-            type="button"
-            onClick={() => setCameraOpen(true)}
-            aria-label="Scanner avec la caméra"
-            title={cameraSupported ? 'Scanner avec la caméra' : 'Caméra non supportée sur ce navigateur'}
-            className={`btn w-12 flex items-center justify-center text-xl shrink-0 ${cameraSupported ? 'btn-secondary' : 'btn-ghost opacity-60'}`}
-          >
-            📷
-          </button>
-          <button
-            className="btn btn-primary w-12 flex items-center justify-center text-2xl font-bold shrink-0"
+            className="btn btn-primary hidden md:flex items-center justify-center text-2xl font-bold w-12 shrink-0"
             onClick={() => addLine(codeInput)}
           >
             +
