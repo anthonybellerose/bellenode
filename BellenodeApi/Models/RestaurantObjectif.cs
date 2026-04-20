@@ -10,5 +10,7 @@ public class RestaurantObjectif
     [Required, MaxLength(32)]
     public string CodeUpc { get; set; } = "";
 
-    public int ObjectifQty { get; set; }
+    public int MinQty { get; set; }
+    public int MaxQty { get; set; }
+    public int LotQty { get; set; } = 1;
 }

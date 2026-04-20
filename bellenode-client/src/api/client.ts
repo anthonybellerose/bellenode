@@ -67,8 +67,8 @@ export const InventoryApi = {
   nonReferenced: () => api.get<InventoryRow[]>('/inventory/non-referenced').then((r) => r.data),
   objectifs: (status?: ObjectifStatut) =>
     api.get<ObjectifRow[]>('/inventory/objectifs', { params: { status } }).then((r) => r.data),
-  setObjectif: (codeUpc: string, objectifQty: number | null) =>
-    api.patch(`/inventory/objectifs/${codeUpc}`, { objectifQty }).then((r) => r.data),
+  setObjectif: (codeUpc: string, data: { minQty: number; maxQty: number; lotQty: number }) =>
+    api.patch(`/inventory/objectifs/${codeUpc}`, data).then((r) => r.data),
 };
 
 export const ScanApi = {

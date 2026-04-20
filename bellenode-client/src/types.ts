@@ -56,8 +56,10 @@ export interface ObjectifRow {
   codeSaq?: string | null;
   prix?: number | null;
   qtyActuelle: number;
-  objectifQty?: number | null;
-  manque: number;
+  minQty?: number | null;
+  maxQty?: number | null;
+  lotQty?: number | null;
+  aCommander?: number | null;
   statut: ObjectifStatut;
 }
 

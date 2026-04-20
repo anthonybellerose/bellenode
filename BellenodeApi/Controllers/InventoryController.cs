@@ -76,7 +76,7 @@ public class InventoryController : BellenodeControllerBase
         var lastUpdate = await inv.MaxAsync(i => (DateTime?)i.UpdatedAt);
 
         var objectifs = await _db.RestaurantObjectifs
-            .Where(o => o.RestaurantId == restaurantId && o.ObjectifQty > 0)
+            .Where(o => o.RestaurantId == restaurantId && o.MinQty > 0 || o.MaxQty > 0)
             .ToListAsync();
 
         var invMap = await inv.ToDictionaryAsync(i => i.Code, i => i.Quantite);
@@ -86,7 +86,7 @@ public class InventoryController : BellenodeControllerBase
         {
             var qty = invMap.TryGetValue(obj.CodeUpc, out var q) ? q : 0;
             if (qty == 0) rupture++;
-            else if (qty < obj.ObjectifQty) bas++;
+            else if (qty < obj.MinQty) bas++;
         }
 
         return Ok(new
@@ -129,18 +129,30 @@ public class InventoryController : BellenodeControllerBase
             .ToDictionaryAsync(i => i.Code, i => i.Quantite);
         var objMap = await _db.RestaurantObjectifs
             .Where(o => o.RestaurantId == restaurantId)
-            .ToDictionaryAsync(o => o.CodeUpc, o => o.ObjectifQty);
+            .ToDictionaryAsync(o => o.CodeUpc, o => o);
 
         var rows = products.Select(p =>
         {
             var qty = inv.TryGetValue(p.CodeUpc, out var q) ? q : 0;
-            objMap.TryGetValue(p.CodeUpc, out var objectif);
-            var manque = Math.Max(0, objectif - qty);
+            objMap.TryGetValue(p.CodeUpc, out var obj);
+            var minQty = obj?.MinQty ?? 0;
+            var maxQty = obj?.MaxQty ?? 0;
+            var lotQty = obj?.LotQty ?? 1;
+
             string statut;
-            if (objectif == 0) statut = "ignore";
+            if (minQty == 0 && maxQty == 0) statut = "ignore";
             else if (qty == 0) statut = "rupture";
-            else if (qty < objectif) statut = "bas";
+            else if (qty < minQty) statut = "bas";
             else statut = "ok";
+
+            // How many lots to order to reach maxQty
+            int aCommander = 0;
+            if (maxQty > 0 && qty < minQty)
+            {
+                var besoin = maxQty - qty;
+                var lots = (int)Math.Ceiling((double)besoin / lotQty);
+                aCommander = lots * lotQty;
+            }
 
             return new
             {
@@ -150,8 +162,10 @@ public class InventoryController : BellenodeControllerBase
                 codeSaq = p.CodeSaq,
                 prix = p.Prix,
                 qtyActuelle = qty,
-                objectifQty = objectif > 0 ? (int?)objectif : null,
-                manque,
+                minQty = minQty > 0 ? (int?)minQty : null,
+                maxQty = maxQty > 0 ? (int?)maxQty : null,
+                lotQty = obj != null ? (int?)lotQty : null,
+                aCommander = aCommander > 0 ? (int?)aCommander : null,
                 statut
             };
         }).ToList();
@@ -162,7 +176,7 @@ public class InventoryController : BellenodeControllerBase
         return Ok(rows);
     }
 
-    public record ObjectifInput(int? ObjectifQty);
+    public record ObjectifInput(int? MinQty, int? MaxQty, int? LotQty);
 
     [HttpPatch("objectifs/{codeUpc}")]
     public async Task<IActionResult> SetObjectif(string codeUpc, [FromBody] ObjectifInput body)
@@ -174,7 +188,9 @@ public class InventoryController : BellenodeControllerBase
         var existing = await _db.RestaurantObjectifs
             .FirstOrDefaultAsync(o => o.RestaurantId == restaurantId && o.CodeUpc == codeUpc);
 
-        var qty = body.ObjectifQty ?? 0;
+        var minQty = body.MinQty ?? 0;
+        var maxQty = body.MaxQty ?? 0;
+        var lotQty = Math.Max(1, body.LotQty ?? 1);
 
         if (existing is null)
         {
@@ -182,15 +198,19 @@ public class InventoryController : BellenodeControllerBase
             {
                 RestaurantId = restaurantId.Value,
                 CodeUpc = codeUpc,
-                ObjectifQty = qty
+                MinQty = minQty,
+                MaxQty = maxQty,
+                LotQty = lotQty
             });
         }
         else
         {
-            existing.ObjectifQty = qty;
+            existing.MinQty = minQty;
+            existing.MaxQty = maxQty;
+            existing.LotQty = lotQty;
         }
 
         await _db.SaveChangesAsync();
-        return Ok(new { codeUpc, objectifQty = qty });
+        return Ok(new { codeUpc, minQty, maxQty, lotQty });
     }
 }

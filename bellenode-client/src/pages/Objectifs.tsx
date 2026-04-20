@@ -2,65 +2,69 @@ import { useEffect, useState } from 'react';
 import { InventoryApi } from '../api/client';
 import type { ObjectifRow, ObjectifStatut } from '../types';
 import UpcInputWithScanner from '../components/UpcInputWithScanner';
+import { useAuth } from '../context/AuthContext';
 
 const statusLabels: Record<ObjectifStatut, { label: string; badge: string }> = {
-  ok: { label: 'OK', badge: 'badge-green' },
-  bas: { label: 'Stock bas', badge: 'badge-yellow' },
-  rupture: { label: 'Rupture', badge: 'badge-red' },
-  ignore: { label: 'Pas de cible', badge: 'badge-gray' },
+  ok:      { label: 'OK',          badge: 'badge-green' },
+  bas:     { label: 'Stock bas',   badge: 'badge-yellow' },
+  rupture: { label: 'Rupture',     badge: 'badge-red' },
+  ignore:  { label: 'Pas de cible', badge: 'badge-gray' },
 };
 
+type EditForm = { minQty: string; maxQty: string; lotQty: string };
+
 export default function Objectifs() {
+  const { isRestaurantAdmin } = useAuth();
   const [rows, setRows] = useState<ObjectifRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ObjectifStatut | 'all' | 'alerte'>('alerte');
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<ObjectifRow | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '' });
 
   async function load() {
     setLoading(true);
-    try {
-      setRows(await InventoryApi.objectifs());
-    } finally {
-      setLoading(false);
-    }
+    try { setRows(await InventoryApi.objectifs()); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
-  const searchActive = search.trim().length > 0;
-  const filtered = rows.filter((r) => {
-    if (!searchActive) {
-      if (filter === 'alerte') {
-        if (r.statut !== 'bas' && r.statut !== 'rupture') return false;
-      } else if (filter !== 'all' && r.statut !== filter) {
-        return false;
-      }
-    }
-    if (searchActive) {
+  const counts = {
+    all:     rows.length,
+    alerte:  rows.filter(r => r.statut === 'bas' || r.statut === 'rupture').length,
+    rupture: rows.filter(r => r.statut === 'rupture').length,
+    bas:     rows.filter(r => r.statut === 'bas').length,
+    ok:      rows.filter(r => r.statut === 'ok').length,
+    ignore:  rows.filter(r => r.statut === 'ignore').length,
+  };
+
+  const filtered = rows.filter(r => {
+    if (search.trim()) {
       const s = search.toLowerCase();
-      if (!r.nom.toLowerCase().includes(s) && !r.code.includes(s)) return false;
+      return r.nom.toLowerCase().includes(s) || r.code.includes(s);
     }
+    if (filter === 'alerte') return r.statut === 'bas' || r.statut === 'rupture';
+    if (filter !== 'all') return r.statut === filter;
     return true;
   });
 
-  const counts = {
-    all: rows.length,
-    alerte: rows.filter((r) => r.statut === 'bas' || r.statut === 'rupture').length,
-    rupture: rows.filter((r) => r.statut === 'rupture').length,
-    bas: rows.filter((r) => r.statut === 'bas').length,
-    ok: rows.filter((r) => r.statut === 'ok').length,
-    ignore: rows.filter((r) => r.statut === 'ignore').length,
-  };
+  function openEdit(r: ObjectifRow) {
+    setEditing(r);
+    setForm({
+      minQty: r.minQty?.toString() ?? '',
+      maxQty: r.maxQty?.toString() ?? '',
+      lotQty: r.lotQty?.toString() ?? '1',
+    });
+  }
 
   async function saveEdit() {
     if (!editing) return;
-    const val = editValue.trim() === '' ? null : parseInt(editValue);
-    if (val != null && (isNaN(val) || val < 0)) return;
-    await InventoryApi.setObjectif(editing.code, val);
+    const min = form.minQty.trim() === '' ? 0 : parseInt(form.minQty);
+    const max = form.maxQty.trim() === '' ? 0 : parseInt(form.maxQty);
+    const lot = form.lotQty.trim() === '' ? 1 : parseInt(form.lotQty);
+    if (isNaN(min) || isNaN(max) || isNaN(lot) || min < 0 || max < 0 || lot < 1) return;
+    await InventoryApi.setObjectif(editing.code, { minQty: min, maxQty: max, lotQty: lot });
     setEditing(null);
     load();
   }
@@ -70,38 +74,27 @@ export default function Objectifs() {
       <header className="hidden md:block">
         <h2 className="page-title">Objectifs de stock</h2>
         <p className="page-subtitle">
-          Quantités cibles par produit — {counts.all} référencés, {counts.alerte} en alerte
+          Min / Max / Lot par produit — {counts.all} référencés, {counts.alerte} en alerte
         </p>
       </header>
 
       <div className="flex flex-wrap gap-2">
-        <FilterBtn active={filter === 'alerte'} onClick={() => setFilter('alerte')} tone="yellow">
-          ⚠ Alertes ({counts.alerte})
-        </FilterBtn>
-        <FilterBtn active={filter === 'rupture'} onClick={() => setFilter('rupture')} tone="red">
-          Rupture ({counts.rupture})
-        </FilterBtn>
-        <FilterBtn active={filter === 'bas'} onClick={() => setFilter('bas')} tone="yellow">
-          Bas ({counts.bas})
-        </FilterBtn>
-        <FilterBtn active={filter === 'ok'} onClick={() => setFilter('ok')} tone="green">
-          OK ({counts.ok})
-        </FilterBtn>
-        <FilterBtn active={filter === 'ignore'} onClick={() => setFilter('ignore')} tone="gray">
-          Sans cible ({counts.ignore})
-        </FilterBtn>
-        <FilterBtn active={filter === 'all'} onClick={() => setFilter('all')} tone="blue">
-          Tout ({counts.all})
-        </FilterBtn>
+        {(['alerte','rupture','bas','ok','ignore','all'] as const).map(f => (
+          <FilterBtn key={f} active={filter === f} onClick={() => setFilter(f)}
+            tone={f === 'rupture' ? 'red' : f === 'bas' || f === 'alerte' ? 'yellow' : f === 'ok' ? 'green' : f === 'all' ? 'blue' : 'gray'}>
+            {f === 'alerte' ? `⚠ Alertes (${counts.alerte})`
+              : f === 'rupture' ? `Rupture (${counts.rupture})`
+              : f === 'bas' ? `Bas (${counts.bas})`
+              : f === 'ok' ? `OK (${counts.ok})`
+              : f === 'ignore' ? `Sans cible (${counts.ignore})`
+              : `Tout (${counts.all})`}
+          </FilterBtn>
+        ))}
       </div>
 
       <div className="md:max-w-md">
-        <UpcInputWithScanner
-          value={search}
-          onChange={setSearch}
-          placeholder="Rechercher par nom ou code..."
-          type="search"
-        />
+        <UpcInputWithScanner value={search} onChange={setSearch}
+          placeholder="Rechercher par nom ou code..." type="search" />
       </div>
 
       <section className="card overflow-hidden">
@@ -113,88 +106,76 @@ export default function Objectifs() {
           </div>
         ) : (
           <>
-            {/* Mobile: cards */}
+            {/* Mobile */}
             <ul className="md:hidden divide-y divide-bg-border">
-              {filtered.map((r) => (
-                <li
-                  key={r.productId}
-                  onClick={() => {
-                    setEditing(r);
-                    setEditValue(r.objectifQty?.toString() ?? '');
-                  }}
-                  className="p-3 active:bg-bg-elevated cursor-pointer"
-                >
+              {filtered.map(r => (
+                <li key={r.productId}
+                  onClick={() => isRestaurantAdmin && openEdit(r)}
+                  className={`p-3 ${isRestaurantAdmin ? 'active:bg-bg-elevated cursor-pointer' : ''}`}>
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-gray-100 truncate">{r.nom}</div>
                       <div className="text-[10px] font-mono text-gray-500 truncate">{r.code}</div>
-                      <div className="mt-1">
-                        <span className={`badge ${statusLabels[r.statut].badge}`}>
-                          {statusLabels[r.statut].label}
-                        </span>
-                        {r.manque > 0 && (
-                          <span className="text-xs text-yellow-400 ml-2">Manque {r.manque}</span>
-                        )}
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
+                        <span className={`badge ${statusLabels[r.statut].badge}`}>{statusLabels[r.statut].label}</span>
+                        {r.aCommander && <span className="text-xs text-orange-400 font-semibold">Commander {r.aCommander}</span>}
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="text-right flex-shrink-0 space-y-0.5">
                       <div className="text-lg font-bold">
                         <span className={qtyColor(r)}>{r.qtyActuelle}</span>
-                        <span className="text-gray-600 text-sm"> / </span>
-                        <span className="text-accent">{r.objectifQty ?? '—'}</span>
                       </div>
-                      <div className="text-[10px] text-gray-500">actuel / cible</div>
+                      {(r.minQty || r.maxQty) && (
+                        <div className="text-[10px] text-gray-500">
+                          min <span className="text-gray-300">{r.minQty ?? '—'}</span>
+                          {' / '}max <span className="text-gray-300">{r.maxQty ?? '—'}</span>
+                          {r.lotQty && r.lotQty > 1 && <span> · lot {r.lotQty}</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
 
-            {/* Desktop: table */}
+            {/* Desktop */}
             <div className="hidden md:block">
               <table className="table-default">
                 <thead>
                   <tr>
                     <th>Produit</th>
                     <th className="text-right">Stock</th>
-                    <th className="text-right">Cible</th>
-                    <th className="text-right">Manque</th>
+                    <th className="text-right">Min</th>
+                    <th className="text-right">Max</th>
+                    <th className="text-right">Lot</th>
+                    <th className="text-right">À commander</th>
                     <th>Statut</th>
-                    <th className="w-20"></th>
+                    {isRestaurantAdmin && <th className="w-20"></th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r) => (
+                  {filtered.map(r => (
                     <tr key={r.productId}>
                       <td>
                         <div className="text-gray-100">{r.nom}</div>
                         <div className="text-[10px] font-mono text-gray-500">{r.code}</div>
                       </td>
                       <td className={`text-right font-bold ${qtyColor(r)}`}>{r.qtyActuelle}</td>
-                      <td className="text-right text-accent font-semibold">{r.objectifQty ?? '—'}</td>
+                      <td className="text-right text-gray-300">{r.minQty ?? '—'}</td>
+                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '—'}</td>
+                      <td className="text-right text-gray-400">{r.lotQty ?? '—'}</td>
                       <td className="text-right">
-                        {r.manque > 0 ? (
-                          <span className="text-yellow-400">−{r.manque}</span>
-                        ) : (
-                          <span className="text-gray-600">—</span>
-                        )}
+                        {r.aCommander
+                          ? <span className="text-orange-400 font-semibold">{r.aCommander}</span>
+                          : <span className="text-gray-600">—</span>}
                       </td>
-                      <td>
-                        <span className={`badge ${statusLabels[r.statut].badge}`}>
-                          {statusLabels[r.statut].label}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="text-accent hover:text-accent-hover text-xs"
-                          onClick={() => {
-                            setEditing(r);
-                            setEditValue(r.objectifQty?.toString() ?? '');
-                          }}
-                        >
-                          Éditer
-                        </button>
-                      </td>
+                      <td><span className={`badge ${statusLabels[r.statut].badge}`}>{statusLabels[r.statut].label}</span></td>
+                      {isRestaurantAdmin && (
+                        <td>
+                          <button className="text-accent hover:text-accent-hover text-xs"
+                            onClick={() => openEdit(r)}>Éditer</button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -210,31 +191,30 @@ export default function Objectifs() {
             <div>
               <h3 className="text-lg font-bold">{editing.nom}</h3>
               <p className="text-xs font-mono text-gray-500">{editing.code}</p>
+              <p className="text-sm text-gray-400 mt-1">Stock actuel : <strong className="text-white">{editing.qtyActuelle}</strong></p>
             </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Quantité cible</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                autoFocus
-                className="w-full text-xl text-center font-bold"
-                style={{ minHeight: 56 }}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Stock actuel: <strong className="text-white">{editing.qtyActuelle}</strong> · Laisser vide pour
-                retirer l'objectif
-              </p>
+
+            <div className="grid grid-cols-3 gap-3">
+              {(['minQty', 'maxQty', 'lotQty'] as const).map(field => (
+                <div key={field}>
+                  <label className="block text-xs text-gray-400 mb-1">
+                    {field === 'minQty' ? 'Minimum' : field === 'maxQty' ? 'Maximum' : 'Lot'}
+                  </label>
+                  <input type="number" inputMode="numeric" min={field === 'lotQty' ? 1 : 0}
+                    value={form[field]}
+                    onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+                    placeholder={field === 'lotQty' ? '1' : '0'}
+                    className="w-full text-center text-lg font-bold" style={{ minHeight: 48 }} />
+                </div>
+              ))}
             </div>
+            <p className="text-xs text-gray-500">
+              Laisser Min et Max à 0 pour retirer l'objectif. Lot = quantité minimale de commande.
+            </p>
+
             <div className="flex gap-2">
-              <button className="btn btn-ghost flex-1" onClick={() => setEditing(null)}>
-                Annuler
-              </button>
-              <button className="btn btn-primary flex-1" onClick={saveEdit}>
-                Enregistrer
-              </button>
+              <button className="btn btn-ghost flex-1" onClick={() => setEditing(null)}>Annuler</button>
+              <button className="btn btn-primary flex-1" onClick={saveEdit}>Enregistrer</button>
             </div>
           </div>
         </div>
@@ -243,34 +223,21 @@ export default function Objectifs() {
   );
 }
 
-function FilterBtn({
-  active,
-  onClick,
-  tone,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  tone: 'red' | 'yellow' | 'green' | 'gray' | 'blue';
-  children: React.ReactNode;
+function FilterBtn({ active, onClick, tone, children }: {
+  active: boolean; onClick: () => void;
+  tone: 'red' | 'yellow' | 'green' | 'gray' | 'blue'; children: React.ReactNode;
 }) {
-  const toneClass = active
-    ? {
-        red: 'bg-red-700 border-red-600 text-white',
-        yellow: 'bg-yellow-700 border-yellow-600 text-white',
-        green: 'bg-green-700 border-green-600 text-white',
-        gray: 'bg-bg-elevated border-bg-border text-gray-200',
-        blue: 'bg-accent border-transparent text-white',
-      }[tone]
-    : 'bg-bg-elevated border-bg-border text-gray-400 active:bg-bg-border';
-
+  const toneClass = active ? {
+    red: 'bg-red-700 border-red-600 text-white',
+    yellow: 'bg-yellow-700 border-yellow-600 text-white',
+    green: 'bg-green-700 border-green-600 text-white',
+    gray: 'bg-bg-elevated border-bg-border text-gray-200',
+    blue: 'bg-accent border-transparent text-white',
+  }[tone] : 'bg-bg-elevated border-bg-border text-gray-400 active:bg-bg-border';
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <button type="button" onClick={onClick}
       className={`px-3 py-2 rounded-md text-sm font-medium border transition-colors ${toneClass}`}
-      style={{ minHeight: 40 }}
-    >
+      style={{ minHeight: 40 }}>
       {children}
     </button>
   );
