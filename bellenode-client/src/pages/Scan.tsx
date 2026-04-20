@@ -199,7 +199,7 @@ export default function Scan() {
           {modeButton('=', '= Fixer', 'bg-accent')}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-stretch">
           <input
             ref={inputRef}
             type="text"
@@ -213,21 +213,18 @@ export default function Scan() {
             onChange={(e) => setCodeInput(e.target.value)}
             onKeyDown={handleKey}
             className="flex-1 font-mono text-lg"
-            style={{ minHeight: 52 }}
           />
           <button
             type="button"
             onClick={() => setCameraOpen(true)}
             aria-label="Scanner avec la caméra"
             title={cameraSupported ? 'Scanner avec la caméra' : 'Caméra non supportée sur ce navigateur'}
-            className={`btn px-4 ${cameraSupported ? 'btn-secondary' : 'btn-ghost opacity-60'}`}
-            style={{ minHeight: 52 }}
+            className={`btn w-12 flex items-center justify-center text-xl shrink-0 ${cameraSupported ? 'btn-secondary' : 'btn-ghost opacity-60'}`}
           >
             📷
           </button>
           <button
-            className="btn btn-primary px-5"
-            style={{ minHeight: 52 }}
+            className="btn btn-primary w-12 flex items-center justify-center text-2xl font-bold shrink-0"
             onClick={() => addLine(codeInput)}
           >
             +
