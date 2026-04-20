@@ -169,6 +169,7 @@ public class InventoryController : BellenodeControllerBase
     {
         var restaurantId = await GetAuthorizedRestaurantId(_db);
         if (restaurantId is null) return Forbid();
+        if (!await IsRestaurantAdmin(_db, restaurantId.Value)) return Forbid();
 
         var existing = await _db.RestaurantObjectifs
             .FirstOrDefaultAsync(o => o.RestaurantId == restaurantId && o.CodeUpc == codeUpc);

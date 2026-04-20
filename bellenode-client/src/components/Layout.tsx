@@ -2,31 +2,29 @@ import { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: '📊' },
-  { to: '/scan', label: 'Scan', icon: '📷' },
-  { to: '/produits', label: 'Produits', icon: '🍾' },
-  { to: '/objectifs', label: 'Objectifs', icon: '🎯' },
-  { to: '/batches', label: 'Historique', icon: '📋' },
-  { to: '/non-referencer', label: 'Non référencés', icon: '❓' },
-  { to: '/mappings', label: 'Caisses', icon: '📦' },
-];
-
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, restaurant, isRestaurantAdmin, logout } = useAuth();
 
+  const isSuperAdmin = user?.role === 'SuperAdmin';
+
   const allNavItems = [
-    ...navItems,
+    { to: '/', label: 'Dashboard', icon: '📊' },
+    { to: '/scan', label: 'Scan', icon: '📷' },
+    { to: '/batches', label: 'Historique', icon: '📋' },
     ...(isRestaurantAdmin
       ? [
+          { to: '/produits', label: 'Produits', icon: '🍾' },
+          { to: '/objectifs', label: 'Objectifs', icon: '🎯' },
+          { to: '/non-referencer', label: 'Non référencés', icon: '❓' },
+          { to: '/mappings', label: 'Caisses', icon: '📦' },
           { to: '/admin/join-requests', label: 'Demandes', icon: '🔔' },
           { to: '/admin/invites', label: 'Invitations', icon: '🔗' },
         ]
       : []),
-    ...(user?.role === 'SuperAdmin'
+    ...(isSuperAdmin
       ? [
           { to: '/admin/restaurants', label: 'Restaurants', icon: '🏪' },
           { to: '/admin/users', label: 'Utilisateurs', icon: '👥' },

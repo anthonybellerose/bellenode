@@ -16,8 +16,8 @@ import time
 FTP_HOST = "win8073.site4now.net"
 FTP_USER = "bellenode"
 FTP_PASS = "Antho2026!"
-PUBLISH_DIR = Path(r"C:\Users\JimmieRoy\Bellenode\BellenodeApi\publish")
-APP_OFFLINE = Path(r"C:\Users\JimmieRoy\Bellenode\app_offline.htm")
+PUBLISH_DIR = Path("/home/serveur02/bellenode/BellenodeApi/publish")
+APP_OFFLINE = Path("/home/serveur02/bellenode/app_offline.htm")
 
 SKIP_FILES = {"web.config.bak"}
 DELETE_BEFORE_DEPLOY = ["default.htm", "index.html"]
