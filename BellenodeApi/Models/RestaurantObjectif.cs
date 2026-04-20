@@ -12,5 +12,5 @@ public class RestaurantObjectif
 
     public int MinQty { get; set; }
     public int MaxQty { get; set; }
-    public int LotQty { get; set; } = 1;
+    public int? LotQty { get; set; }
 }

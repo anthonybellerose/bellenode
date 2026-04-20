@@ -70,6 +70,7 @@ public class ProductsController : BellenodeControllerBase
         existing.CodeSaq = input.CodeSaq;
         existing.Prix = input.Prix;
         existing.UnitesParCaisse = input.UnitesParCaisse;
+        existing.LotQty = input.LotQty;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

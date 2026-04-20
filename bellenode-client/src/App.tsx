@@ -17,6 +17,7 @@ import AdminRestaurants from './pages/Admin/AdminRestaurants';
 import AdminUsers from './pages/Admin/AdminUsers';
 import JoinRequests from './pages/Admin/JoinRequests';
 import Invites from './pages/Admin/Invites';
+import Inventaire from './pages/Inventaire';
 import AdminEmployees from './pages/Admin/AdminEmployees';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,7 @@ export default function App() {
       }>
         <Route index element={<Dashboard />} />
         <Route path="/scan" element={<Scan />} />
+        <Route path="/inventaire" element={<Inventaire />} />
         <Route path="/produits" element={<Products />} />
         <Route path="/objectifs" element={<Objectifs />} />
         <Route path="/batches" element={<Batches />} />

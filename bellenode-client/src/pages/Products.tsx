@@ -195,6 +195,7 @@ function ProductForm({
   const [nom, setNom] = useState(initial?.nom ?? '');
   const [codeSaq, setCodeSaq] = useState(initial?.codeSaq ?? '');
   const [prix, setPrix] = useState<string>(initial?.prix?.toString() ?? '');
+  const [lotQty, setLotQty] = useState<string>(initial?.lotQty?.toString() ?? '');
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 md:items-center items-end">
@@ -220,6 +221,10 @@ function ProductForm({
             <label className="block text-sm text-gray-400 mb-1">Prix ($)</label>
             <input type="number" step="0.01" value={prix} onChange={(e) => setPrix(e.target.value)} className="w-full" />
           </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Lot par défaut</label>
+            <input type="number" min="1" value={lotQty} onChange={(e) => setLotQty(e.target.value)} placeholder="1" className="w-full" />
+          </div>
         </div>
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn btn-ghost" onClick={onCancel}>
@@ -233,6 +238,7 @@ function ProductForm({
                 nom,
                 codeSaq: codeSaq || null,
                 prix: prix ? parseFloat(prix) : null,
+                lotQty: lotQty ? parseInt(lotQty) : null,
               })
             }
           >

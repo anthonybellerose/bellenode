@@ -118,26 +118,34 @@ public class InventoryController : BellenodeControllerBase
     }
 
     [HttpGet("objectifs")]
-    public async Task<IActionResult> Objectifs([FromQuery] string? status = null)
+    public async Task<IActionResult> Objectifs([FromQuery] string? status = null, [FromQuery] bool inventoryOnly = false)
     {
         var restaurantId = await GetAuthorizedRestaurantId(_db);
         if (restaurantId is null) return Forbid();
 
-        var products = await _db.Products.OrderBy(p => p.Nom).ToListAsync();
-        var inv = await _db.Inventory
+        var invItems = await _db.Inventory
             .Where(i => i.RestaurantId == restaurantId)
-            .ToDictionaryAsync(i => i.Code, i => i.Quantite);
+            .ToListAsync();
+        var invMap = invItems.ToDictionary(i => i.Code, i => i.Quantite);
+
+        var products = await _db.Products.OrderBy(p => p.Nom).ToListAsync();
+        if (inventoryOnly)
+        {
+            var invCodes = invMap.Keys.ToHashSet();
+            products = products.Where(p => invCodes.Contains(p.CodeUpc)).ToList();
+        }
+
         var objMap = await _db.RestaurantObjectifs
             .Where(o => o.RestaurantId == restaurantId)
             .ToDictionaryAsync(o => o.CodeUpc, o => o);
 
         var rows = products.Select(p =>
         {
-            var qty = inv.TryGetValue(p.CodeUpc, out var q) ? q : 0;
+            var qty = invMap.TryGetValue(p.CodeUpc, out var q) ? q : 0;
             objMap.TryGetValue(p.CodeUpc, out var obj);
             var minQty = obj?.MinQty ?? 0;
             var maxQty = obj?.MaxQty ?? 0;
-            var lotQty = obj?.LotQty ?? 1;
+            var lotEffectif = obj?.LotQty ?? p.LotQty ?? 1;
 
             string statut;
             if (minQty == 0 && maxQty == 0) statut = "ignore";
@@ -145,13 +153,12 @@ public class InventoryController : BellenodeControllerBase
             else if (qty < minQty) statut = "bas";
             else statut = "ok";
 
-            // How many lots to order to reach maxQty
             int aCommander = 0;
             if (maxQty > 0 && qty < minQty)
             {
                 var besoin = maxQty - qty;
-                var lots = (int)Math.Ceiling((double)besoin / lotQty);
-                aCommander = lots * lotQty;
+                var lots = (int)Math.Ceiling((double)besoin / lotEffectif);
+                aCommander = lots * lotEffectif;
             }
 
             return new
@@ -164,7 +171,9 @@ public class InventoryController : BellenodeControllerBase
                 qtyActuelle = qty,
                 minQty = minQty > 0 ? (int?)minQty : null,
                 maxQty = maxQty > 0 ? (int?)maxQty : null,
-                lotQty = obj != null ? (int?)lotQty : null,
+                lotQty = obj?.LotQty,
+                lotDefault = p.LotQty,
+                lotEffectif,
                 aCommander = aCommander > 0 ? (int?)aCommander : null,
                 statut
             };

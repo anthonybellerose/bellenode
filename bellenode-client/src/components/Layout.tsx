@@ -13,11 +13,11 @@ export default function Layout() {
   const allNavItems = [
     { to: '/', label: 'Dashboard', icon: '📊' },
     { to: '/scan', label: 'Scan', icon: '📷' },
+    { to: '/inventaire', label: 'Inventaire', icon: '📦' },
     { to: '/batches', label: 'Historique', icon: '📋' },
     ...(isRestaurantAdmin
       ? [
           { to: '/produits', label: 'Produits', icon: '🍾' },
-          { to: '/objectifs', label: 'Objectifs', icon: '🎯' },
           { to: '/non-referencer', label: 'Non référencés', icon: '❓' },
           { to: '/admin/employees', label: 'Employés', icon: '👥' },
           { to: '/admin/join-requests', label: 'Demandes', icon: '🔔' },

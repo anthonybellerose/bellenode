@@ -5,6 +5,7 @@ export interface Product {
   codeSaq?: string | null;
   prix?: number | null;
   unitesParCaisse?: number | null;
+  lotQty?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +60,8 @@ export interface ObjectifRow {
   minQty?: number | null;
   maxQty?: number | null;
   lotQty?: number | null;
+  lotDefault?: number | null;
+  lotEffectif: number;
   aCommander?: number | null;
   statut: ObjectifStatut;
 }

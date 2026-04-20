@@ -18,6 +18,7 @@ public class Product
     public decimal? Prix { get; set; }
 
     public int? UnitesParCaisse { get; set; }
+    public int? LotQty { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
