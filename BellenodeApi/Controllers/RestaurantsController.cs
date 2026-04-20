@@ -25,6 +25,18 @@ public class RestaurantsController : BellenodeControllerBase
         return Ok(restaurants);
     }
 
+    [HttpGet("public")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPublic()
+    {
+        var restaurants = await _db.Restaurants
+            .Where(r => r.IsActive)
+            .OrderBy(r => r.Nom)
+            .Select(r => new { r.Id, r.Nom })
+            .ToListAsync();
+        return Ok(restaurants);
+    }
+
     public record RestaurantInput(string Nom);
 
     [HttpPost]

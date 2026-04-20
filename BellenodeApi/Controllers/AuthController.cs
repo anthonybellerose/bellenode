@@ -1,4 +1,5 @@
 using BellenodeApi.Data;
+using BellenodeApi.Models;
 using BellenodeApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,12 +31,107 @@ public class AuthController : BellenodeControllerBase
         if (user is null || !AuthService.VerifyPassword(req.Password, user.PasswordHash))
             return Unauthorized(new { error = "Courriel ou mot de passe invalide." });
 
-        var token = _auth.GenerateToken(user);
+        return Ok(new
+        {
+            token = _auth.GenerateToken(user),
+            user = new { user.Id, user.Email, user.Nom, role = user.Role.ToString() }
+        });
+    }
+
+    public record RegisterRequest(string Email, string Nom, string Password, int? RestaurantId);
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password) || string.IsNullOrWhiteSpace(req.Nom))
+            return BadRequest(new { error = "Tous les champs sont requis." });
+
+        if (await _db.Users.AnyAsync(u => u.Email == req.Email.Trim().ToLower()))
+            return BadRequest(new { error = "Ce courriel est déjà utilisé." });
+
+        var user = new User
+        {
+            Email = req.Email.Trim().ToLower(),
+            Nom = req.Nom.Trim(),
+            PasswordHash = AuthService.HashPassword(req.Password),
+            Role = UserRole.User
+        };
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        if (req.RestaurantId.HasValue)
+        {
+            var restaurant = await _db.Restaurants
+                .FirstOrDefaultAsync(r => r.Id == req.RestaurantId && r.IsActive);
+            if (restaurant != null)
+            {
+                _db.JoinRequests.Add(new JoinRequest
+                {
+                    UserId = user.Id,
+                    RestaurantId = req.RestaurantId.Value
+                });
+                await _db.SaveChangesAsync();
+            }
+        }
 
         return Ok(new
         {
-            token,
-            user = new { user.Id, user.Email, user.Nom, role = user.Role.ToString() }
+            token = _auth.GenerateToken(user),
+            user = new { user.Id, user.Email, user.Nom, role = user.Role.ToString() },
+            joinRequestSent = req.RestaurantId.HasValue
+        });
+    }
+
+    [HttpGet("invite/{token}")]
+    public async Task<IActionResult> GetInviteInfo(string token)
+    {
+        var invite = await _db.InviteTokens
+            .Include(i => i.Restaurant)
+            .FirstOrDefaultAsync(i => i.Token == token && i.UsedAt == null && i.ExpiresAt > DateTime.UtcNow);
+
+        if (invite is null) return NotFound(new { error = "Lien invalide ou expiré." });
+
+        return Ok(new { restaurantId = invite.RestaurantId, restaurantNom = invite.Restaurant.Nom });
+    }
+
+    public record RegisterWithInviteRequest(string Email, string Nom, string Password, string Token);
+
+    [HttpPost("register-invite")]
+    public async Task<IActionResult> RegisterWithInvite([FromBody] RegisterWithInviteRequest req)
+    {
+        var invite = await _db.InviteTokens
+            .Include(i => i.Restaurant)
+            .FirstOrDefaultAsync(i => i.Token == req.Token && i.UsedAt == null && i.ExpiresAt > DateTime.UtcNow);
+
+        if (invite is null) return BadRequest(new { error = "Lien invalide ou expiré." });
+
+        if (await _db.Users.AnyAsync(u => u.Email == req.Email.Trim().ToLower()))
+            return BadRequest(new { error = "Ce courriel est déjà utilisé." });
+
+        var user = new User
+        {
+            Email = req.Email.Trim().ToLower(),
+            Nom = req.Nom.Trim(),
+            PasswordHash = AuthService.HashPassword(req.Password),
+            Role = UserRole.User
+        };
+        _db.Users.Add(user);
+        invite.UsedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _db.UserRestaurantAccesses.Add(new UserRestaurantAccess
+        {
+            UserId = user.Id,
+            RestaurantId = invite.RestaurantId,
+            RestaurantRole = RestaurantRole.User
+        });
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            token = _auth.GenerateToken(user),
+            user = new { user.Id, user.Email, user.Nom, role = user.Role.ToString() },
+            restaurant = new { id = invite.RestaurantId, nom = invite.Restaurant.Nom }
         });
     }
 
@@ -45,7 +141,6 @@ public class AuthController : BellenodeControllerBase
     {
         var user = await _db.Users.FindAsync(CurrentUserId);
         if (user is null) return Unauthorized();
-
         return Ok(new { user.Id, user.Email, user.Nom, role = user.Role.ToString() });
     }
 
@@ -58,7 +153,7 @@ public class AuthController : BellenodeControllerBase
             var all = await _db.Restaurants
                 .Where(r => r.IsActive)
                 .OrderBy(r => r.Nom)
-                .Select(r => new { r.Id, r.Nom })
+                .Select(r => new { r.Id, r.Nom, restaurantRole = "SuperAdmin" })
                 .ToListAsync();
             return Ok(all);
         }
@@ -66,7 +161,12 @@ public class AuthController : BellenodeControllerBase
         var restaurants = await _db.UserRestaurantAccesses
             .Where(a => a.UserId == CurrentUserId && a.Restaurant.IsActive)
             .OrderBy(a => a.Restaurant.Nom)
-            .Select(a => new { a.Restaurant.Id, a.Restaurant.Nom })
+            .Select(a => new
+            {
+                a.Restaurant.Id,
+                a.Restaurant.Nom,
+                restaurantRole = a.RestaurantRole.ToString()
+            })
             .ToListAsync();
 
         return Ok(restaurants);

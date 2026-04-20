@@ -16,6 +16,8 @@ public class BellenodeDbContext : DbContext
     public DbSet<Restaurant> Restaurants => Set<Restaurant>();
     public DbSet<UserRestaurantAccess> UserRestaurantAccesses => Set<UserRestaurantAccess>();
     public DbSet<RestaurantObjectif> RestaurantObjectifs => Set<RestaurantObjectif>();
+    public DbSet<JoinRequest> JoinRequests => Set<JoinRequest>();
+    public DbSet<InviteToken> InviteTokens => Set<InviteToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,5 +66,15 @@ public class BellenodeDbContext : DbContext
         modelBuilder.Entity<RestaurantObjectif>()
             .HasIndex(o => new { o.RestaurantId, o.CodeUpc })
             .IsUnique();
+
+        modelBuilder.Entity<JoinRequest>()
+            .HasOne(j => j.User).WithMany().HasForeignKey(j => j.UserId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<JoinRequest>()
+            .HasOne(j => j.Restaurant).WithMany().HasForeignKey(j => j.RestaurantId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<InviteToken>()
+            .HasOne(i => i.Restaurant).WithMany().HasForeignKey(i => i.RestaurantId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<InviteToken>()
+            .HasIndex(i => i.Token).IsUnique();
     }
 }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using BellenodeApi.Data;
+using BellenodeApi.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,5 +26,13 @@ public class BellenodeControllerBase : ControllerBase
             .AnyAsync(a => a.UserId == CurrentUserId && a.RestaurantId == restaurantId);
 
         return hasAccess ? restaurantId : null;
+    }
+
+    protected async Task<bool> IsRestaurantAdmin(BellenodeDbContext db, int restaurantId)
+    {
+        if (IsSuperAdmin) return true;
+        var access = await db.UserRestaurantAccesses
+            .FirstOrDefaultAsync(a => a.UserId == CurrentUserId && a.RestaurantId == restaurantId);
+        return access?.RestaurantRole == RestaurantRole.Admin;
     }
 }

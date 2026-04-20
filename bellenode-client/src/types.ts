@@ -21,6 +21,21 @@ export interface Restaurant {
   nom: string;
   isActive?: boolean;
   createdAt?: string;
+  restaurantRole?: 'User' | 'Admin' | 'SuperAdmin';
+}
+
+export interface JoinRequest {
+  id: number;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  createdAt: string;
+  user: { id: number; nom: string; email: string };
+}
+
+export interface InviteToken {
+  id: number;
+  token: string;
+  expiresAt: string;
+  createdAt: string;
 }
 
 export interface UserWithAccess {

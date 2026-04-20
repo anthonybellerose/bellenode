@@ -111,3 +111,24 @@ export const AdminApi = {
 };
 
 export default api;
+
+export const JoinRequestsApi = {
+  list: () => api.get('/join-requests').then((r) => r.data),
+  approve: (id: number) => api.post(`/join-requests/${id}/approve`).then((r) => r.data),
+  reject: (id: number) => api.post(`/join-requests/${id}/reject`).then((r) => r.data),
+};
+
+export const InvitesApi = {
+  list: () => api.get('/invites').then((r) => r.data),
+  create: () => api.post('/invites').then((r) => r.data),
+  revoke: (id: number) => api.delete(`/invites/${id}`).then((r) => r.data),
+};
+
+export const PublicApi = {
+  restaurants: () => api.get('/restaurants/public').then((r) => r.data),
+  inviteInfo: (token: string) => api.get(`/auth/invite/${token}`).then((r) => r.data),
+  register: (data: { email: string; nom: string; password: string; restaurantId?: number }) =>
+    api.post('/auth/register', data).then((r) => r.data),
+  registerWithInvite: (data: { email: string; nom: string; password: string; token: string }) =>
+    api.post('/auth/register-invite', data).then((r) => r.data),
+};

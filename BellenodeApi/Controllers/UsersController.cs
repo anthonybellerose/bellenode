@@ -32,11 +32,12 @@ public class UsersController : BellenodeControllerBase
             u.Nom,
             role = u.Role.ToString(),
             u.CreatedAt,
-            restaurants = u.RestaurantAccesses.Select(a => new { a.RestaurantId, a.Restaurant.Nom })
+            restaurants = u.RestaurantAccesses.Select(a => new { a.RestaurantId, a.Restaurant.Nom, restaurantRole = a.RestaurantRole.ToString() })
         }));
     }
 
-    public record CreateUserRequest(string Email, string Nom, string Password, string Role, List<int> RestaurantIds);
+    public record RestaurantAssignment(int RestaurantId, string RestaurantRole);
+    public record CreateUserRequest(string Email, string Nom, string Password, string Role, List<RestaurantAssignment> Restaurants);
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest req)
@@ -57,17 +58,25 @@ public class UsersController : BellenodeControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        foreach (var rid in req.RestaurantIds.Distinct())
+        foreach (var assignment in req.Restaurants)
         {
-            if (await _db.Restaurants.AnyAsync(r => r.Id == rid))
-                _db.UserRestaurantAccesses.Add(new UserRestaurantAccess { UserId = user.Id, RestaurantId = rid });
+            if (await _db.Restaurants.AnyAsync(r => r.Id == assignment.RestaurantId))
+            {
+                Enum.TryParse<RestaurantRole>(assignment.RestaurantRole, out var rRole);
+                _db.UserRestaurantAccesses.Add(new UserRestaurantAccess
+                {
+                    UserId = user.Id,
+                    RestaurantId = assignment.RestaurantId,
+                    RestaurantRole = rRole
+                });
+            }
         }
         await _db.SaveChangesAsync();
 
         return Ok(new { user.Id, user.Email, user.Nom, role = user.Role.ToString() });
     }
 
-    public record UpdateUserRequest(string Email, string Nom, string Role, string? Password, List<int> RestaurantIds);
+    public record UpdateUserRequest(string Email, string Nom, string Role, string? Password, List<RestaurantAssignment> Restaurants);
 
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest req)
@@ -94,10 +103,18 @@ public class UsersController : BellenodeControllerBase
             .ToListAsync();
         _db.UserRestaurantAccesses.RemoveRange(existing);
 
-        foreach (var rid in req.RestaurantIds.Distinct())
+        foreach (var assignment in req.Restaurants)
         {
-            if (await _db.Restaurants.AnyAsync(r => r.Id == rid))
-                _db.UserRestaurantAccesses.Add(new UserRestaurantAccess { UserId = user.Id, RestaurantId = rid });
+            if (await _db.Restaurants.AnyAsync(r => r.Id == assignment.RestaurantId))
+            {
+                Enum.TryParse<RestaurantRole>(assignment.RestaurantRole, out var rRole);
+                _db.UserRestaurantAccesses.Add(new UserRestaurantAccess
+                {
+                    UserId = user.Id,
+                    RestaurantId = assignment.RestaurantId,
+                    RestaurantRole = rRole
+                });
+            }
         }
 
         await _db.SaveChangesAsync();

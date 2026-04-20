@@ -16,10 +16,16 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, restaurant, logout } = useAuth();
+  const { user, restaurant, isRestaurantAdmin, logout } = useAuth();
 
   const allNavItems = [
     ...navItems,
+    ...(isRestaurantAdmin
+      ? [
+          { to: '/admin/join-requests', label: 'Demandes', icon: '🔔' },
+          { to: '/admin/invites', label: 'Invitations', icon: '🔗' },
+        ]
+      : []),
     ...(user?.role === 'SuperAdmin'
       ? [
           { to: '/admin/restaurants', label: 'Restaurants', icon: '🏪' },

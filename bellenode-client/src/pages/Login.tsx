@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AuthApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
@@ -97,6 +97,11 @@ export default function Login() {
             </button>
           </form>
         </div>
+
+        <p className="mt-5 text-center text-gray-500 text-sm">
+          Pas encore de compte ?{' '}
+          <Link to="/register" className="text-accent hover:underline">S'inscrire</Link>
+        </p>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ interface AuthState {
   token: string | null;
   user: AuthUser | null;
   restaurant: Restaurant | null;
+  isRestaurantAdmin: boolean;
   login: (token: string, user: AuthUser) => void;
   selectRestaurant: (r: Restaurant) => void;
   logout: () => void;
@@ -32,6 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('bn_restaurant');
   };
 
+  const isRestaurantAdmin =
+    user?.role === 'SuperAdmin' || restaurant?.restaurantRole === 'Admin' || restaurant?.restaurantRole === 'SuperAdmin';
+
   const selectRestaurant = (r: Restaurant) => {
     localStorage.setItem('bn_restaurant', JSON.stringify(r));
     setRestaurant(r);
@@ -47,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, user, restaurant, login, selectRestaurant, logout }}>
+    <AuthContext.Provider value={{ token, user, restaurant, isRestaurantAdmin, login, selectRestaurant, logout }}>
       {children}
     </AuthContext.Provider>
   );
