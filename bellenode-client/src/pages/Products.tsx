@@ -195,7 +195,6 @@ function ProductForm({
   const [nom, setNom] = useState(initial?.nom ?? '');
   const [codeSaq, setCodeSaq] = useState(initial?.codeSaq ?? '');
   const [prix, setPrix] = useState<string>(initial?.prix?.toString() ?? '');
-  const [objectifQty, setObjectifQty] = useState<string>(initial?.objectifQty?.toString() ?? '');
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 md:items-center items-end">
@@ -222,19 +221,6 @@ function ProductForm({
             <input type="number" step="0.01" value={prix} onChange={(e) => setPrix(e.target.value)} className="w-full" />
           </div>
         </div>
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">Quantité cible 🎯</label>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            value={objectifQty}
-            onChange={(e) => setObjectifQty(e.target.value)}
-            className="w-full"
-            placeholder="Laisser vide pour ne pas suivre"
-          />
-        </div>
-
         <div className="flex gap-2 justify-end pt-2">
           <button className="btn btn-ghost" onClick={onCancel}>
             Annuler
@@ -247,7 +233,6 @@ function ProductForm({
                 nom,
                 codeSaq: codeSaq || null,
                 prix: prix ? parseFloat(prix) : null,
-                objectifQty: objectifQty ? parseInt(objectifQty) : null,
               })
             }
           >
