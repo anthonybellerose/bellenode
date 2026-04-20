@@ -103,9 +103,9 @@ export const AdminApi = {
   deleteRestaurant: (id: number) => api.delete(`/restaurants/${id}`).then((r) => r.data),
 
   getUsers: () => api.get<UserWithAccess[]>('/users').then((r) => r.data),
-  createUser: (data: { email: string; nom: string; password: string; role: string; restaurantIds: number[] }) =>
+  createUser: (data: { email: string; nom: string; password: string; role: string; restaurants: { restaurantId: number; restaurantRole: string }[] }) =>
     api.post<UserWithAccess>('/users', data).then((r) => r.data),
-  updateUser: (id: number, data: { email: string; nom: string; role: string; password?: string; restaurantIds: number[] }) =>
+  updateUser: (id: number, data: { email: string; nom: string; role: string; password?: string; restaurants: { restaurantId: number; restaurantRole: string }[] }) =>
     api.put<UserWithAccess>(`/users/${id}`, data).then((r) => r.data),
   deleteUser: (id: number) => api.delete(`/users/${id}`).then((r) => r.data),
 };

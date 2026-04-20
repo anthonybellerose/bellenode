@@ -9,7 +9,8 @@ export default function AdminUsers() {
   const [showForm, setShowForm] = useState(false);
   const [editUser, setEditUser] = useState<UserWithAccess | null>(null);
 
-  const emptyForm = { email: '', nom: '', password: '', role: 'User', restaurantIds: [] as number[] };
+  type RestaurantAssignment = { restaurantId: number; restaurantRole: string };
+  const emptyForm = { email: '', nom: '', password: '', role: 'User', restaurants: [] as RestaurantAssignment[] };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -22,24 +23,34 @@ export default function AdminUsers() {
 
   const openCreate = () => { setForm(emptyForm); setEditUser(null); setShowForm(true); };
   const openEdit = (u: UserWithAccess) => {
-    setForm({ email: u.email, nom: u.nom, password: '', role: u.role, restaurantIds: u.restaurants.map((r) => r.restaurantId) });
+    setForm({ email: u.email, nom: u.nom, password: '', role: u.role, restaurants: u.restaurants.map((r) => ({ restaurantId: r.restaurantId, restaurantRole: r.restaurantRole })) });
     setEditUser(u);
     setShowForm(true);
   };
 
   const toggleRestaurant = (id: number) => {
+    setForm((f) => {
+      const exists = f.restaurants.find((r) => r.restaurantId === id);
+      return {
+        ...f,
+        restaurants: exists ? f.restaurants.filter((r) => r.restaurantId !== id) : [...f.restaurants, { restaurantId: id, restaurantRole: 'User' }],
+      };
+    });
+  };
+
+  const setRestaurantRole = (id: number, role: string) => {
     setForm((f) => ({
       ...f,
-      restaurantIds: f.restaurantIds.includes(id) ? f.restaurantIds.filter((r) => r !== id) : [...f.restaurantIds, id],
+      restaurants: f.restaurants.map((r) => r.restaurantId === id ? { ...r, restaurantRole: role } : r),
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editUser) {
-      await AdminApi.updateUser(editUser.id, { ...form, restaurantIds: form.restaurantIds });
+      await AdminApi.updateUser(editUser.id, { ...form });
     } else {
-      await AdminApi.createUser({ ...form, restaurantIds: form.restaurantIds });
+      await AdminApi.createUser({ ...form });
     }
     setShowForm(false);
     load();
@@ -91,14 +102,29 @@ export default function AdminUsers() {
 
           <div>
             <label className="text-xs text-gray-400 block mb-2">Restaurants</label>
-            <div className="flex flex-wrap gap-2">
-              {restaurants.map((r) => (
-                <button type="button" key={r.id}
-                  onClick={() => toggleRestaurant(r.id)}
-                  className={`px-3 py-1 rounded-full text-sm border transition-colors ${form.restaurantIds.includes(r.id) ? 'bg-accent text-white border-accent' : 'border-gray-600 text-gray-400 hover:border-gray-400'}`}>
-                  {r.nom}
-                </button>
-              ))}
+            <div className="space-y-2">
+              {restaurants.map((r) => {
+                const assignment = form.restaurants.find((a) => a.restaurantId === r.id);
+                const selected = !!assignment;
+                return (
+                  <div key={r.id} className="flex items-center gap-3">
+                    <button type="button"
+                      onClick={() => toggleRestaurant(r.id)}
+                      className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? 'bg-accent text-white border-accent' : 'border-gray-600 text-gray-400 hover:border-gray-400'}`}>
+                      {r.nom}
+                    </button>
+                    {selected && (
+                      <select
+                        value={assignment.restaurantRole}
+                        onChange={(e) => setRestaurantRole(r.id, e.target.value)}
+                        className="bg-bg border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none">
+                        <option value="User">Employé</option>
+                        <option value="Admin">Admin</option>
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -129,7 +155,10 @@ export default function AdminUsers() {
               {u.restaurants.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {u.restaurants.map((r) => (
-                    <span key={r.restaurantId} className="text-xs text-gray-500 bg-bg px-2 py-0.5 rounded">{r.nom}</span>
+                    <span key={r.restaurantId} className="text-xs text-gray-500 bg-bg px-2 py-0.5 rounded">
+                      {r.nom}
+                      {r.restaurantRole === 'Admin' && <span className="ml-1 text-accent font-semibold">· Admin</span>}
+                    </span>
                   ))}
                 </div>
               )}

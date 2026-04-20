@@ -44,7 +44,7 @@ export interface UserWithAccess {
   nom: string;
   role: 'User' | 'SuperAdmin';
   createdAt: string;
-  restaurants: { restaurantId: number; nom: string }[];
+  restaurants: { restaurantId: number; nom: string; restaurantRole: string }[];
 }
 
 export type ObjectifStatut = 'ok' | 'bas' | 'rupture' | 'ignore';
