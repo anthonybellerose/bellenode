@@ -9,6 +9,9 @@ import type {
   ScanBatchDetail,
   ObjectifRow,
   ObjectifStatut,
+  AuthUser,
+  Restaurant,
+  UserWithAccess,
 } from '../types';
 
 const api = axios.create({
@@ -16,14 +19,45 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('bn_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+
+  const restaurantRaw = localStorage.getItem('bn_restaurant');
+  if (restaurantRaw) {
+    const r = JSON.parse(restaurantRaw) as Restaurant;
+    config.headers['X-Restaurant-Id'] = String(r.id);
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('bn_token');
+      localStorage.removeItem('bn_user');
+      localStorage.removeItem('bn_restaurant');
+      window.location.href = '/login';
+    }
+    return Promise.reject(err);
+  },
+);
+
+export const AuthApi = {
+  login: (email: string, password: string) =>
+    api.post<{ token: string; user: AuthUser }>('/auth/login', { email, password }).then((r) => r.data),
+  me: () => api.get<AuthUser>('/auth/me').then((r) => r.data),
+  myRestaurants: () => api.get<Restaurant[]>('/auth/restaurants').then((r) => r.data),
+};
+
 export const ProductsApi = {
   list: (search?: string) => api.get<Product[]>('/products', { params: { search } }).then((r) => r.data),
   byUpc: (code: string) => api.get<Product>(`/products/by-upc/${code}`).then((r) => r.data),
   create: (p: Partial<Product>) => api.post<Product>('/products', p).then((r) => r.data),
   update: (id: number, p: Partial<Product>) => api.put<Product>(`/products/${id}`, p).then((r) => r.data),
   remove: (id: number) => api.delete(`/products/${id}`).then((r) => r.data),
-  setObjectif: (id: number, objectifQty: number | null) =>
-    api.patch(`/products/${id}/objectif`, { objectifQty }).then((r) => r.data),
 };
 
 export const InventoryApi = {
@@ -33,6 +67,8 @@ export const InventoryApi = {
   nonReferenced: () => api.get<InventoryRow[]>('/inventory/non-referenced').then((r) => r.data),
   objectifs: (status?: ObjectifStatut) =>
     api.get<ObjectifRow[]>('/inventory/objectifs', { params: { status } }).then((r) => r.data),
+  setObjectif: (codeUpc: string, objectifQty: number | null) =>
+    api.patch(`/inventory/objectifs/${codeUpc}`, { objectifQty }).then((r) => r.data),
 };
 
 export const ScanApi = {
@@ -58,6 +94,20 @@ export const MappingsApi = {
   update: (id: number, m: Partial<CaisseMapping>) =>
     api.put<CaisseMapping>(`/caissemappings/${id}`, m).then((r) => r.data),
   remove: (id: number) => api.delete(`/caissemappings/${id}`).then((r) => r.data),
+};
+
+export const AdminApi = {
+  getRestaurants: () => api.get<Restaurant[]>('/restaurants').then((r) => r.data),
+  createRestaurant: (nom: string) => api.post<Restaurant>('/restaurants', { nom }).then((r) => r.data),
+  updateRestaurant: (id: number, nom: string) => api.put<Restaurant>(`/restaurants/${id}`, { nom }).then((r) => r.data),
+  deleteRestaurant: (id: number) => api.delete(`/restaurants/${id}`).then((r) => r.data),
+
+  getUsers: () => api.get<UserWithAccess[]>('/users').then((r) => r.data),
+  createUser: (data: { email: string; nom: string; password: string; role: string; restaurantIds: number[] }) =>
+    api.post<UserWithAccess>('/users', data).then((r) => r.data),
+  updateUser: (id: number, data: { email: string; nom: string; role: string; password?: string; restaurantIds: number[] }) =>
+    api.put<UserWithAccess>(`/users/${id}`, data).then((r) => r.data),
+  deleteUser: (id: number) => api.delete(`/users/${id}`).then((r) => r.data),
 };
 
 export default api;

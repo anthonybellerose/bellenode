@@ -1,5 +1,6 @@
 using BellenodeApi.Data;
 using BellenodeApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,8 @@ namespace BellenodeApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController : ControllerBase
+[Authorize]
+public class ProductsController : BellenodeControllerBase
 {
     private readonly BellenodeDbContext _db;
 
@@ -27,8 +29,7 @@ public class ProductsController : ControllerBase
                 (p.CodeSaq != null && p.CodeSaq.Contains(s)));
         }
 
-        var products = await query.OrderBy(p => p.Nom).ToListAsync();
-        return Ok(products);
+        return Ok(await query.OrderBy(p => p.Nom).ToListAsync());
     }
 
     [HttpGet("{id}")]
@@ -46,6 +47,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "SuperAdmin")]
     public async Task<IActionResult> Create([FromBody] Product input)
     {
         input.Id = 0;
@@ -57,6 +59,7 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "SuperAdmin")]
     public async Task<IActionResult> Update(int id, [FromBody] Product input)
     {
         var existing = await _db.Products.FindAsync(id);
@@ -67,28 +70,14 @@ public class ProductsController : ControllerBase
         existing.CodeSaq = input.CodeSaq;
         existing.Prix = input.Prix;
         existing.UnitesParCaisse = input.UnitesParCaisse;
-        existing.ObjectifQty = input.ObjectifQty;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
         return Ok(existing);
     }
 
-    public record ObjectifInput(int? ObjectifQty);
-
-    [HttpPatch("{id}/objectif")]
-    public async Task<IActionResult> SetObjectif(int id, [FromBody] ObjectifInput body)
-    {
-        var existing = await _db.Products.FindAsync(id);
-        if (existing is null) return NotFound();
-
-        existing.ObjectifQty = body.ObjectifQty;
-        existing.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        return Ok(new { existing.Id, existing.CodeUpc, existing.ObjectifQty });
-    }
-
     [HttpDelete("{id}")]
+    [Authorize(Roles = "SuperAdmin")]
     public async Task<IActionResult> Delete(int id)
     {
         var existing = await _db.Products.FindAsync(id);

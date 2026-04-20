@@ -1,4 +1,5 @@
 using BellenodeApi.Models;
+using BellenodeApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace BellenodeApi.Data;
@@ -10,114 +11,54 @@ public static class SeedData
         await db.Database.MigrateAsync();
 
         if (!await db.Products.AnyAsync())
-        {
             db.Products.AddRange(BuildProducts());
-        }
 
         if (!await db.CaisseMappings.AnyAsync())
-        {
             db.CaisseMappings.AddRange(BuildMappings());
-        }
 
         await db.SaveChangesAsync();
 
-        await SeedObjectifsAsync(db);
+        await SeedRestaurantAsync(db);
+        await SeedAdminUserAsync(db);
     }
 
-    private static async Task SeedObjectifsAsync(BellenodeDbContext db)
+    private static async Task SeedRestaurantAsync(BellenodeDbContext db)
     {
-        var hasObjectifs = await db.Products.AnyAsync(p => p.ObjectifQty != null);
-        if (hasObjectifs) return;
+        if (await db.Restaurants.AnyAsync()) return;
 
-        var objectifs = BuildObjectifs();
-        var products = await db.Products.ToDictionaryAsync(p => p.CodeUpc);
-
-        foreach (var (upc, qty) in objectifs)
+        db.Restaurants.Add(new Restaurant
         {
-            if (products.TryGetValue(upc, out var p))
-            {
-                p.ObjectifQty = qty;
-                p.UpdatedAt = DateTime.UtcNow;
-            }
-        }
-
+            Nom = "Le resto bar pub 111",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        });
         await db.SaveChangesAsync();
     }
 
-    private static Dictionary<string, int> BuildObjectifs() => new()
+    private static async Task SeedAdminUserAsync(BellenodeDbContext db)
     {
-        { "4901777035614", 2 },
-        { "080686821311", 2 },
-        { "088004400361", 2 },
-        { "814789003325", 1 },
-        { "089540448985", 3 },
-        { "080480007553", 1 },
-        { "048415363396", 1 },
-        { "624177063769", 0 },
-        { "088544016756", 1 },
-        { "620213190208", 1 },
-        { "835229000506", 1 },
-        { "5011013100095", 1 },
-        { "5000329002353", 1 },
-        { "3041311026096", 1 },
-        { "048415163088", 0 },
-        { "624177100013", 2 },
-        { "048415163071", 2 },
-        { "050037599183", 2 },
-        { "4067700028457", 1 },
-        { "3035542002004", 1 },
-        { "3018300014488", 2 },
-        { "088004400163", 3 },
-        { "3269552642770", 2 },
-        { "085592160158", 1 },
-        { "3451740000428", 0 },
-        { "628055952985", 1 },
-        { "628308620128", 0 },
-        { "628308620234", 1 },
-        { "627843872610", 2 },
-        { "8004160681309", 1 },
-        { "080915078264", 1 },
-        { "8006550943233", 1 },
-        { "3380140240854", 15 },
-        { "087000151109", 12 },
-        { "776103000277", 12 },
-        { "057496090022", 1 },
-        { "088004400354", 2 },
-        { "056049139164", 3 },
-        { "663935100100", 3 },
-        { "056049028918", 8 },
-        { "056049021599", 8 },
-        { "8001660126750", 6 },
-        { "8001660109753", 3 },
-        { "063657035962", 8 },
-        { "056049138624", 3 },
-        { "620654022946", 3 },
-        { "056049135029", 6 },
-        { "8410388013363", 3 },
-        { "8001660197156", 13 },
-        { "056049136941", 6 },
-        { "628504255377", 0 },
-        { "082000006374", 2 },
-        { "8001660101757", 6 },
-        { "8410388101473", 3 },
-        { "056049132813", 2 },
-        { "774336442734", 2 },
-        { "3179077542588", 10 },
-        { "3179077542564", 10 },
-        { "8716000966537", 1 },
-        { "3104052010158", 0 },
-        { "080686832034", 4 },
-        { "721733000029", 2 },
-        { "811538019569", 1 },
-        { "082000802723", 3 },
-        { "620213250100", 12 },
-        { "089540535067", 2 },
-        { "6001108030139", 1 },
-        { "080432402689", 1 },
-        { "050037014501", 1 },
-        { "6282501010588", 2 },
-        { "00088004400699", 1 },
-    };
+        if (await db.Users.AnyAsync(u => u.Email == "anthonybellerose2504@gmail.com")) return;
+
+        var restaurant = await db.Restaurants.FirstAsync();
+
+        var user = new User
+        {
+            Email = "anthonybellerose2504@gmail.com",
+            Nom = "Anthony",
+            PasswordHash = AuthService.HashPassword("Bellenode@2026!"),
+            Role = UserRole.SuperAdmin,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        db.UserRestaurantAccesses.Add(new UserRestaurantAccess
+        {
+            UserId = user.Id,
+            RestaurantId = restaurant.Id
+        });
+        await db.SaveChangesAsync();
+    }
 
     private static List<Product> BuildProducts() => new()
     {

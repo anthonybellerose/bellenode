@@ -1,5 +1,6 @@
 using BellenodeApi.Data;
 using BellenodeApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,8 @@ namespace BellenodeApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ScanController : ControllerBase
+[Authorize]
+public class ScanController : BellenodeControllerBase
 {
     private readonly BellenodeDbContext _db;
 
@@ -19,6 +21,9 @@ public class ScanController : ControllerBase
     [HttpPost("batch")]
     public async Task<IActionResult> SubmitBatch([FromBody] SubmitBatchRequest req)
     {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
         if (req.Operations == null || req.Operations.Count == 0)
             return BadRequest(new { error = "Aucune opération." });
 
@@ -38,13 +43,9 @@ public class ScanController : ControllerBase
             var code = raw.Code.Trim();
 
             if (mappings.TryGetValue(code, out var map))
-            {
                 converted.Add((mode.Value, map.CodeUnite, qty * map.Quantite));
-            }
             else
-            {
                 converted.Add((mode.Value, code, qty));
-            }
         }
 
         if (converted.Count == 0)
@@ -52,6 +53,7 @@ public class ScanController : ControllerBase
 
         var batch = new ScanBatch
         {
+            RestaurantId = restaurantId.Value,
             Note = req.Note,
             CreatedBy = req.CreatedBy,
             CreatedAt = DateTime.UtcNow,
@@ -66,7 +68,7 @@ public class ScanController : ControllerBase
 
         var affectedCodes = converted.Select(c => c.code).Distinct().ToList();
         var existingInventory = await _db.Inventory
-            .Where(i => affectedCodes.Contains(i.Code))
+            .Where(i => i.RestaurantId == restaurantId && affectedCodes.Contains(i.Code))
             .ToDictionaryAsync(i => i.Code);
 
         foreach (var (mode, code, qty) in converted)
@@ -75,7 +77,7 @@ public class ScanController : ControllerBase
 
             if (!existingInventory.TryGetValue(code, out var inv))
             {
-                inv = new InventoryItem { Code = code, Quantite = 0, IsReferenced = isRef };
+                inv = new InventoryItem { Code = code, RestaurantId = restaurantId.Value, Quantite = 0, IsReferenced = isRef };
                 _db.Inventory.Add(inv);
                 existingInventory[code] = inv;
             }
@@ -151,9 +153,9 @@ public class ScanController : ControllerBase
             if (line.StartsWith("#")) continue;
 
             var upper = line.ToUpperInvariant();
-            if (upper == "+" || upper == "ADD") { currentMode = "+"; continue; }
-            if (upper == "-" || upper == "REM") { currentMode = "-"; continue; }
-            if (upper == "=" || upper == "SET") { currentMode = "="; continue; }
+            if (upper is "+" or "ADD") { currentMode = "+"; continue; }
+            if (upper is "-" or "REM") { currentMode = "-"; continue; }
+            if (upper is "=" or "SET") { currentMode = "="; continue; }
 
             ops.Add(new RawOp(currentMode, line, 1));
         }
@@ -161,14 +163,12 @@ public class ScanController : ControllerBase
         return Ok(ops);
     }
 
-    private static ScanMode? ParseMode(string raw)
-    {
-        return raw?.Trim().ToUpperInvariant() switch
+    private static ScanMode? ParseMode(string raw) =>
+        raw?.Trim().ToUpperInvariant() switch
         {
-            "+" or "ADD" or "ADD" => ScanMode.Add,
+            "+" or "ADD" => ScanMode.Add,
             "-" or "REM" or "REMOVE" => ScanMode.Remove,
             "=" or "SET" => ScanMode.Set,
             _ => null
         };
-    }
 }

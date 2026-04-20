@@ -9,6 +9,8 @@ public class InventoryItem
     [Required, MaxLength(32)]
     public string Code { get; set; } = "";
 
+    public int RestaurantId { get; set; }
+
     public int Quantite { get; set; }
 
     public bool IsReferenced { get; set; }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { InventoryApi, ProductsApi } from '../api/client';
+import { InventoryApi } from '../api/client';
 import type { ObjectifRow, ObjectifStatut } from '../types';
 import UpcInputWithScanner from '../components/UpcInputWithScanner';
 
@@ -60,7 +60,7 @@ export default function Objectifs() {
     if (!editing) return;
     const val = editValue.trim() === '' ? null : parseInt(editValue);
     if (val != null && (isNaN(val) || val < 0)) return;
-    await ProductsApi.setObjectif(editing.productId, val);
+    await InventoryApi.setObjectif(editing.code, val);
     setEditing(null);
     load();
   }

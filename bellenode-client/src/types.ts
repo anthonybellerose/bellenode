@@ -5,9 +5,31 @@ export interface Product {
   codeSaq?: string | null;
   prix?: number | null;
   unitesParCaisse?: number | null;
-  objectifQty?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  nom: string;
+  role: 'User' | 'SuperAdmin';
+}
+
+export interface Restaurant {
+  id: number;
+  nom: string;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface UserWithAccess {
+  id: number;
+  email: string;
+  nom: string;
+  role: 'User' | 'SuperAdmin';
+  createdAt: string;
+  restaurants: { restaurantId: number; nom: string }[];
 }
 
 export type ObjectifStatut = 'ok' | 'bas' | 'rupture' | 'ignore';

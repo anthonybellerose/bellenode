@@ -6,6 +6,8 @@ public class ScanBatch
 {
     public int Id { get; set; }
 
+    public int RestaurantId { get; set; }
+
     [MaxLength(100)]
     public string? Note { get; set; }
 

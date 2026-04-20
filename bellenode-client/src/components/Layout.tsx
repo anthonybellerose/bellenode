@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: '📊' },
@@ -14,12 +15,24 @@ const navItems = [
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, restaurant, logout } = useAuth();
+
+  const allNavItems = [
+    ...navItems,
+    ...(user?.role === 'SuperAdmin'
+      ? [
+          { to: '/admin/restaurants', label: 'Restaurants', icon: '🏪' },
+          { to: '/admin/users', label: 'Utilisateurs', icon: '👥' },
+        ]
+      : []),
+  ];
 
   useEffect(() => {
     setDrawerOpen(false);
   }, [location.pathname]);
 
-  const currentItem = navItems.find((i) =>
+  const currentItem = allNavItems.find((i) =>
     i.to === '/' ? location.pathname === '/' : location.pathname.startsWith(i.to),
   );
 
@@ -32,7 +45,7 @@ export default function Layout() {
           <p className="text-xs text-gray-500 mt-1">Gestion d'inventaire</p>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
+          {allNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -50,9 +63,10 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-bg-border text-xs text-gray-500">
-          <div>v0.1.0 — MVP</div>
-          <div className="mt-1">bellenode.com</div>
+        <div className="p-3 border-t border-bg-border text-xs text-gray-500 space-y-1">
+          {restaurant && <div className="text-gray-300 font-medium truncate">{restaurant.nom}</div>}
+          <div className="text-gray-500">{user?.nom}</div>
+          <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">Déconnexion</button>
         </div>
       </aside>
 
@@ -108,7 +122,7 @@ export default function Layout() {
               </button>
             </div>
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-              {navItems.map((item) => (
+              {allNavItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -126,9 +140,10 @@ export default function Layout() {
                 </NavLink>
               ))}
             </nav>
-            <div className="p-4 border-t border-bg-border text-xs text-gray-500">
-              <div>v0.1.0 — MVP</div>
-              <div className="mt-1">bellenode.com</div>
+            <div className="p-4 border-t border-bg-border text-xs text-gray-500 space-y-1">
+              {restaurant && <div className="text-gray-300 font-medium truncate">{restaurant.nom}</div>}
+              <div>{user?.nom}</div>
+              <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">Déconnexion</button>
             </div>
           </aside>
         </div>

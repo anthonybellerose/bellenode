@@ -1,4 +1,6 @@
 using BellenodeApi.Data;
+using BellenodeApi.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,7 +8,8 @@ namespace BellenodeApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class InventoryController : ControllerBase
+[Authorize]
+public class InventoryController : BellenodeControllerBase
 {
     private readonly BellenodeDbContext _db;
 
@@ -15,12 +18,13 @@ public class InventoryController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] string? search = null, [FromQuery] bool? referenced = null)
     {
-        var invQuery = _db.Inventory.AsQueryable();
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var invQuery = _db.Inventory.Where(i => i.RestaurantId == restaurantId);
 
         if (referenced.HasValue)
-        {
             invQuery = invQuery.Where(i => i.IsReferenced == referenced.Value);
-        }
 
         var items = await invQuery.ToListAsync();
         if (items.Count == 0) return Ok(Array.Empty<object>());
@@ -54,32 +58,35 @@ public class InventoryController : ControllerBase
                                    (r.codeSaq != null && r.codeSaq.Contains(s)));
         }
 
-        var result = rows
-            .OrderByDescending(r => r.isReferenced)
-            .ThenBy(r => r.nom ?? r.code)
-            .ToList();
-
-        return Ok(result);
+        return Ok(rows.OrderByDescending(r => r.isReferenced).ThenBy(r => r.nom ?? r.code).ToList());
     }
 
     [HttpGet("summary")]
     public async Task<IActionResult> Summary()
     {
-        var totalReferenced = await _db.Inventory.Where(i => i.IsReferenced).SumAsync(i => (int?)i.Quantite) ?? 0;
-        var totalNonReferenced = await _db.Inventory.Where(i => !i.IsReferenced).SumAsync(i => (int?)i.Quantite) ?? 0;
-        var distinctReferenced = await _db.Inventory.CountAsync(i => i.IsReferenced);
-        var distinctNonReferenced = await _db.Inventory.CountAsync(i => !i.IsReferenced);
-        var lastUpdate = await _db.Inventory.MaxAsync(i => (DateTime?)i.UpdatedAt);
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
 
-        var productsWithObjectif = await _db.Products.Where(p => p.ObjectifQty != null && p.ObjectifQty > 0).ToListAsync();
-        var invMap = await _db.Inventory.ToDictionaryAsync(i => i.Code, i => i.Quantite);
+        var inv = _db.Inventory.Where(i => i.RestaurantId == restaurantId);
+
+        var totalReferenced = await inv.Where(i => i.IsReferenced).SumAsync(i => (int?)i.Quantite) ?? 0;
+        var totalNonReferenced = await inv.Where(i => !i.IsReferenced).SumAsync(i => (int?)i.Quantite) ?? 0;
+        var distinctReferenced = await inv.CountAsync(i => i.IsReferenced);
+        var distinctNonReferenced = await inv.CountAsync(i => !i.IsReferenced);
+        var lastUpdate = await inv.MaxAsync(i => (DateTime?)i.UpdatedAt);
+
+        var objectifs = await _db.RestaurantObjectifs
+            .Where(o => o.RestaurantId == restaurantId && o.ObjectifQty > 0)
+            .ToListAsync();
+
+        var invMap = await inv.ToDictionaryAsync(i => i.Code, i => i.Quantite);
         var bas = 0;
         var rupture = 0;
-        foreach (var p in productsWithObjectif)
+        foreach (var obj in objectifs)
         {
-            var qty = invMap.TryGetValue(p.CodeUpc, out var q) ? q : 0;
+            var qty = invMap.TryGetValue(obj.CodeUpc, out var q) ? q : 0;
             if (qty == 0) rupture++;
-            else if (qty < p.ObjectifQty) bas++;
+            else if (qty < obj.ObjectifQty) bas++;
         }
 
         return Ok(new
@@ -90,18 +97,21 @@ public class InventoryController : ControllerBase
             distinctNonReferenced,
             lastUpdate,
             totalProducts = await _db.Products.CountAsync(),
-            totalBatches = await _db.ScanBatches.CountAsync(),
+            totalBatches = await _db.ScanBatches.CountAsync(b => b.RestaurantId == restaurantId),
             stockBas = bas,
             stockRupture = rupture,
-            stockCibles = productsWithObjectif.Count
+            stockCibles = objectifs.Count
         });
     }
 
     [HttpGet("non-referenced")]
     public async Task<IActionResult> NonReferenced()
     {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
         var items = await _db.Inventory
-            .Where(i => !i.IsReferenced)
+            .Where(i => i.RestaurantId == restaurantId && !i.IsReferenced)
             .OrderBy(i => i.Code)
             .ToListAsync();
         return Ok(items);
@@ -110,13 +120,21 @@ public class InventoryController : ControllerBase
     [HttpGet("objectifs")]
     public async Task<IActionResult> Objectifs([FromQuery] string? status = null)
     {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
         var products = await _db.Products.OrderBy(p => p.Nom).ToListAsync();
-        var inv = await _db.Inventory.ToDictionaryAsync(i => i.Code, i => i.Quantite);
+        var inv = await _db.Inventory
+            .Where(i => i.RestaurantId == restaurantId)
+            .ToDictionaryAsync(i => i.Code, i => i.Quantite);
+        var objMap = await _db.RestaurantObjectifs
+            .Where(o => o.RestaurantId == restaurantId)
+            .ToDictionaryAsync(o => o.CodeUpc, o => o.ObjectifQty);
 
         var rows = products.Select(p =>
         {
             var qty = inv.TryGetValue(p.CodeUpc, out var q) ? q : 0;
-            var objectif = p.ObjectifQty ?? 0;
+            objMap.TryGetValue(p.CodeUpc, out var objectif);
             var manque = Math.Max(0, objectif - qty);
             string statut;
             if (objectif == 0) statut = "ignore";
@@ -132,17 +150,46 @@ public class InventoryController : ControllerBase
                 codeSaq = p.CodeSaq,
                 prix = p.Prix,
                 qtyActuelle = qty,
-                objectifQty = p.ObjectifQty,
+                objectifQty = objectif > 0 ? (int?)objectif : null,
                 manque,
                 statut
             };
         }).ToList();
 
         if (!string.IsNullOrWhiteSpace(status))
-        {
             rows = rows.Where(r => r.statut == status).ToList();
-        }
 
         return Ok(rows);
+    }
+
+    public record ObjectifInput(int? ObjectifQty);
+
+    [HttpPatch("objectifs/{codeUpc}")]
+    public async Task<IActionResult> SetObjectif(string codeUpc, [FromBody] ObjectifInput body)
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var existing = await _db.RestaurantObjectifs
+            .FirstOrDefaultAsync(o => o.RestaurantId == restaurantId && o.CodeUpc == codeUpc);
+
+        var qty = body.ObjectifQty ?? 0;
+
+        if (existing is null)
+        {
+            _db.RestaurantObjectifs.Add(new RestaurantObjectif
+            {
+                RestaurantId = restaurantId.Value,
+                CodeUpc = codeUpc,
+                ObjectifQty = qty
+            });
+        }
+        else
+        {
+            existing.ObjectifQty = qty;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { codeUpc, objectifQty = qty });
     }
 }
