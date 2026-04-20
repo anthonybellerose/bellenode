@@ -3,12 +3,14 @@ using BellenodeApi.Data;
 using BellenodeApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<BellenodeDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("BellenodeDb")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("BellenodeDb"))
+           .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
 builder.Services.AddScoped<AuthService>();
 
