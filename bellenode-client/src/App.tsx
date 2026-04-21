@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import JoinInvite from './pages/JoinInvite';
 import SelectRestaurant from './pages/SelectRestaurant';
 import Profil from './pages/Profil';
+import Stats from './pages/Stats';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="/non-referencer" element={<NonReferenced />} />
         <Route path="/mappings" element={<Mappings />} />
         <Route path="/commandes" element={<Commandes />} />
+        <Route path="/stats" element={<Stats />} />
         <Route path="/commandes/:id" element={<CommandeDetail />} />
         <Route path="/profil" element={<Profil />} />
 

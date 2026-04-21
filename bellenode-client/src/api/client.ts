@@ -165,3 +165,17 @@ export const CommandesApi = {
     URL.revokeObjectURL(url);
   },
 };
+
+export interface StatsData {
+  periode: number;
+  statut: { ok: number; bas: number; rupture: number; ignore: number };
+  valeurInventaire: number;
+  topConsommes: { code: string; nom: string; total: number }[];
+  parJour: { date: string; total: number }[];
+  totalRetraits: number;
+}
+
+export const StatsApi = {
+  get: (jours: number = 30) =>
+    api.get<StatsData>('/stats', { params: { jours } }).then((r) => r.data),
+};
