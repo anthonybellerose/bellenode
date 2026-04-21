@@ -215,7 +215,7 @@ public partial class CommandesController : BellenodeControllerBase
         using var logoStream = asm.GetManifestResourceStream("BellenodeApi.Resources.saq_logo.jpeg");
         if (logoStream != null)
         {
-            ws.AddPicture(logoStream, ClosedXML.Excel.XLPictureFormat.Jpeg)
+            ws.AddPicture(logoStream)
               .MoveTo(ws.Cell("A2"))
               .WithSize(240, 60);
         }
