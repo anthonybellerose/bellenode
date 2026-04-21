@@ -72,14 +72,38 @@ export default function Inventaire() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <header className="hidden md:block">
-        <h2 className="page-title">Inventaire</h2>
-        <p className="page-subtitle">
-          {rows.length} produits scannés · {counts.alerte} en alerte
-        </p>
+      <header className="hidden md:flex items-center justify-between gap-4">
+        <div>
+          <h2 className="page-title">Inventaire</h2>
+          <p className="page-subtitle">
+            {rows.length} produits scannés · {counts.alerte} en alerte
+          </p>
+        </div>
+        <button
+          className="btn btn-ghost"
+          onClick={async () => {
+            try {
+              const dateStr = new Date().toISOString().slice(0, 10);
+              await InventoryApi.exportExcel(`inventaire-${dateStr}.xlsx`);
+            } catch { alert('Erreur lors de l\'export.'); }
+          }}
+        >
+          📊 Exporter Excel
+        </button>
       </header>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        <button
+          className="btn btn-ghost text-sm md:hidden"
+          onClick={async () => {
+            try {
+              const dateStr = new Date().toISOString().slice(0, 10);
+              await InventoryApi.exportExcel(`inventaire-${dateStr}.xlsx`);
+            } catch { alert('Erreur lors de l\'export.'); }
+          }}
+        >
+          📊 Export
+        </button>
         {([
           { key: 'all',     label: `Tout (${counts.all})`,          tone: 'blue' },
           { key: 'alerte',  label: `⚠ Alertes (${counts.alerte})`,  tone: 'yellow' },

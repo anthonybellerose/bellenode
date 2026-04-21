@@ -75,6 +75,16 @@ export const InventoryApi = {
     api.get<ObjectifRow[]>('/inventory/objectifs', { params }).then((r) => r.data),
   setObjectif: (codeUpc: string, data: { minQty: number; maxQty: number; lotQty?: number | null }) =>
     api.patch(`/inventory/objectifs/${codeUpc}`, data).then((r) => r.data),
+  exportExcel: async (filename: string = 'inventaire.xlsx') => {
+    const r = await api.get('/inventory/export', {
+      responseType: 'blob',
+      params: { inventoryOnly: false }
+    });
+    const url = URL.createObjectURL(r.data);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const ScanApi = {
