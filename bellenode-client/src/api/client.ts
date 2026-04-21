@@ -141,4 +141,11 @@ export const CommandesApi = {
   create: (data: { note?: string; items: { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number }[] }) =>
     api.post<{ id: number; nbItems: number; totalBtls: number }>('/commandes', data).then(r => r.data),
   remove: (id: number) => api.delete(`/commandes/${id}`).then(r => r.data),
+  exportSaq: async (id: number, filename: string) => {
+    const r = await api.get(`/commandes/${id}/export-saq`, { responseType: 'blob' });
+    const url = URL.createObjectURL(r.data as Blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  },
 };

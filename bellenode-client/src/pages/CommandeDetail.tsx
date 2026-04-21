@@ -33,7 +33,8 @@ export default function CommandeDetailPage() {
       <div className="flex items-center gap-3 print:hidden">
         <button className="btn btn-ghost" onClick={() => navigate('/commandes')}>← Retour</button>
         <span className="text-gray-400 text-sm flex-1">Commande #{commande.id} · {dateStr}</span>
-        <button className="btn btn-primary" onClick={() => window.print()}>🖨 Imprimer</button>
+        <button className="btn btn-ghost" onClick={() => window.print()}>🖨 Imprimer</button>
+        <button className="btn btn-primary" onClick={() => CommandesApi.exportSaq(commande.id, `commande-saq-${commande.id}.xlsx`)}> Excel SAQ</button>
       </div>
 
       {/* Feuille de commande */}
