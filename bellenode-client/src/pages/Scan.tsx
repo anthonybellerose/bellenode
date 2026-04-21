@@ -268,9 +268,29 @@ export default function Scan() {
               className="w-full font-mono text-sm"
               placeholder={'+\n4901777035614\n080686821311\n-\n088004400361'}
             />
-            <button className="btn btn-secondary text-sm" onClick={importBulk}>
-              Importer {bulkText.split('\n').filter((l) => l.trim()).length} ligne(s)
-            </button>
+            <div className="flex flex-wrap gap-2 items-center">
+              <button className="btn btn-secondary text-sm" onClick={importBulk}>
+                Importer {bulkText.split('\n').filter((l) => l.trim()).length} ligne(s)
+              </button>
+              <label className="btn btn-ghost text-sm cursor-pointer">
+                📂 Charger fichier…
+                <input
+                  type="file"
+                  accept=".txt,text/plain"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const text = await f.text();
+                    setBulkText((prev) => (prev ? prev + '\n' + text : text));
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <span className="text-xs text-gray-500">
+                Formats : lignes `+`/`-`/`=` pour changer mode, puis un code par ligne.
+              </span>
+            </div>
           </div>
         )}
       </section>
