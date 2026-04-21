@@ -208,6 +208,32 @@ public partial class CommandesController : BellenodeControllerBase
         var totalBtls       = commande.Items.Sum(i => i.Quantite);
         var dateStr         = commande.CreatedAt.ToString("yyyy-MM-dd");
 
+        // Lookup du lot effectif par CodeSaq (objectif resto > lot défaut du produit > 1)
+        var codesSaq = commande.Items.Select(i => i.CodeSaq).Distinct().ToList();
+        var products = await _db.Products
+            .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
+            .Select(p => new { p.CodeSaq, p.CodeUpc, p.LotQty })
+            .ToListAsync();
+        var productsBySaq = products.ToDictionary(p => p.CodeSaq!);
+        var codesUpc = products.Select(p => p.CodeUpc).ToList();
+        var objectifByUpc = await _db.RestaurantObjectifs
+            .Where(o => o.RestaurantId == restaurantId && codesUpc.Contains(o.CodeUpc))
+            .Select(o => new { o.CodeUpc, o.LotQty })
+            .ToDictionaryAsync(o => o.CodeUpc);
+
+        int GetLot(string codeSaq)
+        {
+            if (!productsBySaq.TryGetValue(codeSaq, out var p)) return 1;
+            if (objectifByUpc.TryGetValue(p.CodeUpc, out var o) && o.LotQty is int ol && ol > 0) return ol;
+            return p.LotQty ?? 1;
+        }
+
+        static string FormatQte(int quantite, int lot)
+        {
+            if (lot > 1 && quantite % lot == 0) return $"{quantite / lot}cs";
+            return $"{quantite}x";
+        }
+
         using var wb = new ClosedXML.Excel.XLWorkbook();
         var ws = wb.AddWorksheet("Commande SAQ");
 
@@ -265,7 +291,7 @@ public partial class CommandesController : BellenodeControllerBase
 
         // Row 13 : en-têtes de colonnes
         var saqBlue  = ClosedXML.Excel.XLColor.FromHtml("#003DA5");
-        var headers  = new[] { "Code\nArticle", "Quantité\nCmdée en bouteille", "Nom du produit", "Format" };
+        var headers  = new[] { "Code\nArticle", "Quantité\ncmdée", "Nom du produit", "Format" };
         for (int c = 1; c <= 4; c++)
         {
             ws.Cell(13, c).Value = headers[c - 1];
@@ -287,7 +313,7 @@ public partial class CommandesController : BellenodeControllerBase
             var r    = 14 + i;
             var item = items[i];
             ws.Cell(r, 1).Value = item.CodeSaq;
-            ws.Cell(r, 2).Value = item.Quantite;
+            ws.Cell(r, 2).Value = FormatQte(item.Quantite, GetLot(item.CodeSaq));
             ws.Cell(r, 3).Value = item.NomProduit;
             ws.Cell(r, 4).Value = item.Volume ?? "";
             ws.Cell(r, 2).Style.Alignment.SetHorizontal(ClosedXML.Excel.XLAlignmentHorizontalValues.Center);
