@@ -157,10 +157,11 @@ public class InventoryController : BellenodeControllerBase
             if (maxQty > 0 && qty < minQty)
             {
                 var besoin = maxQty - qty;
-                // Arrondi au multiple de lot le plus proche : on commande un lot de plus
-                // seulement si au moins la moitié du lot manque (sinon on arrondit en bas).
-                // Ex: lot=12, besoin=14 → 1 lot (12). lot=12, besoin=18 → 2 lots (24).
+                // Arrondi au multiple de lot le plus proche (demi-lot arrondit up).
                 var lots = (int)Math.Round((double)besoin / lotEffectif, MidpointRounding.AwayFromZero);
+                // Garde-fou : jamais en-dessous du min. Il faut assez de lots pour atteindre minQty.
+                var lotsMin = (int)Math.Ceiling((double)(minQty - qty) / lotEffectif);
+                if (lots < lotsMin) lots = lotsMin;
                 aCommander = lots * lotEffectif;
             }
 
