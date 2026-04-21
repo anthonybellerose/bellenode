@@ -23,6 +23,11 @@ export default function CommandeDetailPage() {
 
   const cfg = commande.config;
   const totalBtls = commande.items.reduce((s, i) => s + i.quantite, 0);
+  const totalEstime = commande.items.reduce(
+    (s, i) => s + (i.prixUnitaire ?? 0) * i.quantite, 0
+  );
+  const hasAnyPrix = commande.items.some(i => i.prixUnitaire != null);
+  const fmt$ = (n: number) => n.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
   const dateStr = new Date(commande.createdAt).toLocaleDateString('fr-CA', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
@@ -53,6 +58,9 @@ export default function CommandeDetailPage() {
             <InfoLine label="Responsable" value={cfg.responsable ?? commande.createdBy} />
             <InfoLine label="Date" value={dateStr} />
             <InfoLine label="Total bouteilles" value={String(totalBtls)} bold />
+            {hasAnyPrix && (
+              <InfoLine label="Total estimé" value={fmt$(totalEstime)} bold />
+            )}
           </div>
         </div>
 
@@ -63,24 +71,56 @@ export default function CommandeDetailPage() {
               <th className="text-left py-2 pr-4 font-semibold w-28">Code SAQ</th>
               <th className="text-left py-2 pr-4 font-semibold">Nom du produit</th>
               <th className="text-left py-2 pr-4 font-semibold w-20">Volume</th>
-              <th className="text-right py-2 font-semibold w-24">Qté cmdée</th>
+              <th className="text-right py-2 pr-4 font-semibold w-20">Qté</th>
+              {hasAnyPrix && (
+                <>
+                  <th className="text-right py-2 pr-4 font-semibold w-24">Prix unit.</th>
+                  <th className="text-right py-2 font-semibold w-28">Sous-total</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
-            {commande.items.map((item, i) => (
-              <tr key={item.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                <td className="py-2 pr-4 font-mono text-gray-600">{item.codeSaq}</td>
-                <td className="py-2 pr-4">{item.nomProduit.replace(/\s*-\s*\d.*$/, '')}</td>
-                <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
-                <td className="py-2 text-right font-bold">{item.quantite}</td>
-              </tr>
-            ))}
+            {commande.items.map((item, i) => {
+              const sousTotal = (item.prixUnitaire ?? 0) * item.quantite;
+              return (
+                <tr key={item.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                  <td className="py-2 pr-4 font-mono text-gray-600">{item.codeSaq}</td>
+                  <td className="py-2 pr-4">{item.nomProduit.replace(/\s*-\s*\d.*$/, '')}</td>
+                  <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
+                  <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
+                  {hasAnyPrix && (
+                    <>
+                      <td className="py-2 pr-4 text-right text-gray-600">
+                        {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '—'}
+                      </td>
+                      <td className="py-2 text-right font-medium">
+                        {item.prixUnitaire != null ? fmt$(sousTotal) : '—'}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-800">
-              <td colSpan={3} className="py-2 pr-4 font-semibold text-right">Total bouteilles commandées :</td>
-              <td className="py-2 text-right font-bold text-lg">{totalBtls}</td>
+              <td colSpan={3} className="py-2 pr-4 font-semibold text-right">Total bouteilles :</td>
+              <td className="py-2 pr-4 text-right font-bold text-lg">{totalBtls}</td>
+              {hasAnyPrix && (
+                <>
+                  <td className="py-2 pr-4 text-right font-semibold">Total estimé :</td>
+                  <td className="py-2 text-right font-bold text-lg">{fmt$(totalEstime)}</td>
+                </>
+              )}
             </tr>
+            {hasAnyPrix && (
+              <tr>
+                <td colSpan={6} className="pt-2 text-xs text-gray-500 italic">
+                  * Prix estimé basé sur le prix de base du produit. Peut varier selon le prix SAQ réel.
+                </td>
+              </tr>
+            )}
           </tfoot>
         </table>
 

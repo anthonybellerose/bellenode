@@ -108,6 +108,12 @@ public partial class CommandesController : BellenodeControllerBase
         var config = await _db.CommandeConfigs.FirstOrDefaultAsync(c => c.RestaurantId == restaurantId);
         var resto = await _db.Restaurants.FindAsync(restaurantId.Value);
 
+        var codesSaq = commande.Items.Select(i => i.CodeSaq).Distinct().ToList();
+        var prixByCodeSaq = await _db.Products
+            .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
+            .Select(p => new { p.CodeSaq, p.Prix })
+            .ToDictionaryAsync(p => p.CodeSaq!, p => p.Prix);
+
         return Ok(new {
             commande.Id, commande.CreatedAt, commande.CreatedBy, commande.Note,
             config = new {
@@ -118,7 +124,8 @@ public partial class CommandesController : BellenodeControllerBase
                 responsable = config?.Responsable ?? commande.CreatedBy
             },
             items = commande.Items.Select(i => new {
-                i.Id, i.CodeSaq, i.NomProduit, i.Volume, i.Quantite
+                i.Id, i.CodeSaq, i.NomProduit, i.Volume, i.Quantite,
+                prixUnitaire = prixByCodeSaq.TryGetValue(i.CodeSaq, out var px) ? px : null
             }).OrderBy(i => i.NomProduit).ToList()
         });
     }

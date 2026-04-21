@@ -153,6 +153,7 @@ export interface CommandeItemType {
   nomProduit: string;
   volume?: string | null;
   quantite: number;
+  prixUnitaire?: number | null;
 }
 
 export interface CommandeDetail {
