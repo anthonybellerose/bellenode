@@ -70,7 +70,12 @@ export default function Layout() {
         </nav>
         <div className="p-3 border-t border-bg-border text-xs text-gray-500 space-y-1">
           {restaurant && <div className="text-gray-300 font-medium truncate">{restaurant.nom}</div>}
-          <div className="text-gray-500">{user?.nom}</div>
+          <button
+            onClick={() => navigate('/profil')}
+            className="text-left text-gray-300 hover:text-white w-full truncate"
+          >
+            👤 {user?.nom}
+          </button>
           <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">Déconnexion</button>
         </div>
       </aside>
@@ -147,7 +152,12 @@ export default function Layout() {
             </nav>
             <div className="p-4 border-t border-bg-border text-xs text-gray-500 space-y-1">
               {restaurant && <div className="text-gray-300 font-medium truncate">{restaurant.nom}</div>}
-              <div>{user?.nom}</div>
+              <button
+                onClick={() => { navigate('/profil'); setDrawerOpen(false); }}
+                className="text-left text-gray-300 hover:text-white w-full truncate"
+              >
+                👤 {user?.nom}
+              </button>
               <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">Déconnexion</button>
             </div>
           </aside>

@@ -135,6 +135,27 @@ public class AuthController : BellenodeControllerBase
         });
     }
 
+    public record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
+    {
+        var user = await _db.Users.FindAsync(CurrentUserId);
+        if (user is null) return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(req.NewPassword) || req.NewPassword.Length < 8)
+            return BadRequest(new { error = "Le nouveau mot de passe doit avoir au moins 8 caractères." });
+
+        if (!AuthService.VerifyPassword(req.CurrentPassword ?? "", user.PasswordHash))
+            return BadRequest(new { error = "Mot de passe actuel invalide." });
+
+        user.PasswordHash = AuthService.HashPassword(req.NewPassword);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { ok = true });
+    }
+
     [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> Me()

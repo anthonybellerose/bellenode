@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import JoinInvite from './pages/JoinInvite';
 import SelectRestaurant from './pages/SelectRestaurant';
+import Profil from './pages/Profil';
 import Dashboard from './pages/Dashboard';
 import Scan from './pages/Scan';
 import Products from './pages/Products';
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/mappings" element={<Mappings />} />
         <Route path="/commandes" element={<Commandes />} />
         <Route path="/commandes/:id" element={<CommandeDetail />} />
+        <Route path="/profil" element={<Profil />} />
 
         <Route path="/admin/employees" element={
           <RequireRestaurantAdmin><AdminEmployees /></RequireRestaurantAdmin>

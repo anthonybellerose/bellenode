@@ -50,6 +50,8 @@ export const AuthApi = {
     api.post<{ token: string; user: AuthUser }>('/auth/login', { email, password }).then((r) => r.data),
   me: () => api.get<AuthUser>('/auth/me').then((r) => r.data),
   myRestaurants: () => api.get<Restaurant[]>('/auth/restaurants').then((r) => r.data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }).then((r) => r.data),
 };
 
 export const ProductsApi = {
