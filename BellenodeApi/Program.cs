@@ -13,6 +13,7 @@ builder.Services.AddDbContext<BellenodeDbContext>(options =>
            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<EmailService>();
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

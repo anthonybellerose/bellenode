@@ -21,9 +21,20 @@ public class BellenodeDbContext : DbContext
     public DbSet<CommandeConfig> CommandeConfigs => Set<CommandeConfig>();
     public DbSet<CommandeSAQ> CommandesSAQ => Set<CommandeSAQ>();
     public DbSet<CommandeSAQItem> CommandeSAQItems => Set<CommandeSAQItem>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<PasswordResetToken>()
+            .HasIndex(t => t.Token)
+            .IsUnique();
+
+        modelBuilder.Entity<PasswordResetToken>()
+            .HasOne(t => t.User)
+            .WithMany()
+            .HasForeignKey(t => t.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.CodeUpc)
             .IsUnique();

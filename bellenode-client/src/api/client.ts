@@ -52,6 +52,10 @@ export const AuthApi = {
   myRestaurants: () => api.get<Restaurant[]>('/auth/restaurants').then((r) => r.data),
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post<{ ok: boolean }>('/auth/change-password', { currentPassword, newPassword }).then((r) => r.data),
+  forgotPassword: (email: string) =>
+    api.post<{ ok: boolean }>('/auth/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post<{ ok: boolean }>('/auth/reset-password', { token, newPassword }).then((r) => r.data),
 };
 
 export const ProductsApi = {

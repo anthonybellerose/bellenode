@@ -6,6 +6,8 @@ import Register from './pages/Register';
 import JoinInvite from './pages/JoinInvite';
 import SelectRestaurant from './pages/SelectRestaurant';
 import Profil from './pages/Profil';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Scan from './pages/Scan';
 import Products from './pages/Products';
@@ -53,6 +55,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/join" element={<JoinInvite />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       <Route path="/select-restaurant" element={
         <RequireAuth><SelectRestaurant /></RequireAuth>
