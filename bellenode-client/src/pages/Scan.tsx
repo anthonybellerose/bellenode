@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ProductsApi, ScanApi } from '../api/client';
-import type { RawOp, ScanModeString } from '../types';
+import { ProductsApi, ScanApi, CommandesApi } from '../api/client';
+import type { RawOp, ScanModeString, PendingCommandeItem } from '../types';
 import BarcodeScanner from '../components/BarcodeScanner';
 
 interface ScanLine extends RawOp {
   nom?: string | null;
   unknown?: boolean;
   tempId: number;
+  pendingMatch?: { commandeId: number; itemId: number; commandeDate: string; restant: number } | null;
 }
 
 export default function Scan() {
@@ -22,12 +23,32 @@ export default function Scan() {
   const [bulkText, setBulkText] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraSupported] = useState(() => typeof window !== 'undefined' && 'BarcodeDetector' in window);
+  const [pendingBySaq, setPendingBySaq] = useState<Record<string, PendingCommandeItem[]>>({});
+  const [receiving, setReceiving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  async function reloadPending() {
+    try {
+      const items = await CommandesApi.pendingItems();
+      const map: Record<string, PendingCommandeItem[]> = {};
+      for (const it of items) {
+        if (!map[it.codeSaq]) map[it.codeSaq] = [];
+        map[it.codeSaq].push(it);
+      }
+      // Ordonne par plus vieille commande en premier (FIFO)
+      for (const k of Object.keys(map)) {
+        map[k].sort((a, b) => a.commandeDate.localeCompare(b.commandeDate));
+      }
+      setPendingBySaq(map);
+    } catch { /* ignore — si pas de resto sélectionné par ex */ }
+  }
+
+  useEffect(() => { reloadPending(); }, []);
 
   useEffect(() => {
     localStorage.setItem('bellenode.user', user);
@@ -57,15 +78,26 @@ export default function Scan() {
 
       let nom: string | null = null;
       let unknown = false;
+      let pendingMatch: ScanLine['pendingMatch'] = null;
       try {
         const p = await ProductsApi.byUpc(trimmed);
         nom = p.nom;
+        // Check if the product's codeSaq matches any pending commande item (only in mode +)
+        if (mode === '+' && p.codeSaq && pendingBySaq[p.codeSaq]?.length) {
+          const first = pendingBySaq[p.codeSaq][0];
+          pendingMatch = {
+            commandeId: first.commandeId,
+            itemId: first.id,
+            commandeDate: first.commandeDate,
+            restant: first.qtyManquante,
+          };
+        }
       } catch {
         unknown = true;
       }
 
       setLines((prev) => [
-        { tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: 1, nom, unknown },
+        { tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: 1, nom, unknown, pendingMatch },
         ...prev,
       ]);
       setCodeInput('');
@@ -123,6 +155,37 @@ export default function Scan() {
       console.error(e);
       setMsg('Erreur lors du parsing.');
     }
+  }
+
+  async function markReceptions() {
+    const toReceive = lines.filter(l => l.pendingMatch);
+    if (toReceive.length === 0) return;
+    setReceiving(true); setMsg(null);
+    try {
+      // Regroupe par commandeId pour faire 1 POST par commande
+      const byCmd: Record<number, { itemId: number; qtyReceived: number; markBackorder: boolean }[]> = {};
+      for (const l of toReceive) {
+        const pm = l.pendingMatch!;
+        if (!byCmd[pm.commandeId]) byCmd[pm.commandeId] = [];
+        // Regroupe plusieurs scans pour un même item
+        const existing = byCmd[pm.commandeId].find(x => x.itemId === pm.itemId);
+        if (existing) existing.qtyReceived += l.quantite ?? 1;
+        else byCmd[pm.commandeId].push({ itemId: pm.itemId, qtyReceived: l.quantite ?? 1, markBackorder: false });
+      }
+      let totalReceived = 0;
+      for (const [cmdId, its] of Object.entries(byCmd)) {
+        const res = await CommandesApi.receive(Number(cmdId), its);
+        totalReceived += res.totalReceived;
+      }
+      // Retire les lignes converties
+      const toRemoveIds = new Set(toReceive.map(l => l.tempId));
+      setLines(prev => prev.filter(l => !toRemoveIds.has(l.tempId)));
+      await reloadPending();
+      setMsg(`✅ ${totalReceived} bouteille(s) marquées reçues et ajoutées au stock.`);
+    } catch (e) {
+      console.error(e);
+      setMsg('❌ Erreur lors de la réception.');
+    } finally { setReceiving(false); }
   }
 
   async function submit() {
@@ -295,6 +358,27 @@ export default function Scan() {
         )}
       </section>
 
+      {/* Bandeau détection réception commande */}
+      {(() => {
+        const pendingLines = lines.filter(l => l.pendingMatch);
+        if (pendingLines.length === 0) return null;
+        const total = pendingLines.reduce((s, l) => s + (l.quantite ?? 1), 0);
+        return (
+          <section className="card p-3 border-accent/60 bg-accent/5 flex flex-wrap items-center gap-3">
+            <span className="text-sm text-gray-100 flex-1">
+              ⏳ <strong>{pendingLines.length}</strong> scan{pendingLines.length > 1 ? 's' : ''} correspond{pendingLines.length > 1 ? 'ent' : ''} à des commandes en attente ({total} bouteille{total > 1 ? 's' : ''})
+            </span>
+            <button
+              className="btn btn-primary text-sm"
+              disabled={receiving}
+              onClick={markReceptions}
+            >
+              {receiving ? '…' : `📦 Marquer comme reçu${total > 1 ? 'es' : ''}`}
+            </button>
+          </section>
+        );
+      })()}
+
       {/* Liste des lignes — cards sur mobile, table sur desktop */}
       <section className="card">
         <div className="px-4 py-3 border-b border-bg-border flex items-center justify-between">
@@ -331,6 +415,11 @@ export default function Scan() {
                         l.nom
                       )}
                     </div>
+                    {l.pendingMatch && (
+                      <div className="text-xs text-accent mt-0.5">
+                        ⏳ Cmd #{l.pendingMatch.commandeId} (reste {l.pendingMatch.restant})
+                      </div>
+                    )}
                   </div>
                   <input
                     type="number"
@@ -378,11 +467,18 @@ export default function Scan() {
                       </td>
                       <td className="font-mono text-xs text-gray-400">{l.code}</td>
                       <td>
-                        {l.unknown ? (
-                          <span className="badge badge-yellow">Non référencé</span>
-                        ) : (
-                          <span className="text-gray-200">{l.nom}</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {l.unknown ? (
+                            <span className="badge badge-yellow">Non référencé</span>
+                          ) : (
+                            <span className="text-gray-200">{l.nom}</span>
+                          )}
+                          {l.pendingMatch && (
+                            <span className="text-xs text-accent">
+                              ⏳ Cmd #{l.pendingMatch.commandeId}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="text-right">
                         <input
