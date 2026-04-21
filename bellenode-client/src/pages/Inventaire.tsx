@@ -19,16 +19,17 @@ export default function Inventaire() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ObjectifStatut | 'all' | 'alerte' | 'ignore'>('all');
   const [search, setSearch] = useState('');
+  const [inventoryOnly, setInventoryOnly] = useState(true);
   const [editing, setEditing] = useState<ObjectifRow | null>(null);
   const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '' });
 
   async function load() {
     setLoading(true);
-    try { setRows(await InventoryApi.objectifs({ inventoryOnly: true })); }
+    try { setRows(await InventoryApi.objectifs({ inventoryOnly })); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [inventoryOnly]);
 
   const counts = {
     all:     rows.length,
@@ -118,9 +119,20 @@ export default function Inventaire() {
         ))}
       </div>
 
-      <div className="md:max-w-md">
-        <UpcInputWithScanner value={search} onChange={setSearch}
-          placeholder="Rechercher par nom ou code..." type="search" />
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex-1 md:max-w-md">
+          <UpcInputWithScanner value={search} onChange={setSearch}
+            placeholder="Rechercher par nom ou code..." type="search" />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-400 select-none cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!inventoryOnly}
+            onChange={(e) => setInventoryOnly(!e.target.checked)}
+            className="w-4 h-4"
+          />
+          Afficher tous les produits
+        </label>
       </div>
 
       <section className="card overflow-hidden">

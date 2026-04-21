@@ -50,17 +50,17 @@ export default function AdminEmployees() {
       ) : (
         <ul className="space-y-2">
           {employees.map((e) => (
-            <li key={e.userId} className="card p-4 flex items-center gap-4">
+            <li key={e.userId} className="card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-white font-medium">{e.nom}</div>
-                <div className="text-gray-400 text-sm truncate">{e.email}</div>
+                <div className="text-white font-medium break-words">{e.nom}</div>
+                <div className="text-gray-400 text-sm break-all">{e.email}</div>
               </div>
               {e.isSelf ? (
-                <span className="text-xs text-accent px-2 py-1 border border-accent rounded">
+                <span className="text-xs text-accent px-2 py-1 border border-accent rounded self-start sm:self-auto">
                   {e.restaurantRole === 'Admin' ? 'Admin (vous)' : 'Employé (vous)'}
                 </span>
               ) : (
-                <>
+                <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
                   <select
                     value={e.restaurantRole}
                     onChange={(ev) => changeRole(e.userId, ev.target.value)}
@@ -73,7 +73,7 @@ export default function AdminEmployees() {
                     className="text-red-400 hover:text-red-300 text-sm px-2">
                     Retirer
                   </button>
-                </>
+                </div>
               )}
             </li>
           ))}

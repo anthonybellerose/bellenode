@@ -137,9 +137,19 @@ export default function Commandes() {
                       </div>
                       {c.note && <div className="text-xs text-gray-400 mt-0.5 italic">{c.note}</div>}
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-base font-bold text-accent">{c.totalBtls} btls</div>
-                      <div className="text-[10px] text-gray-500">{c.nbItems} produit{c.nbItems !== 1 ? 's' : ''}</div>
+                    <div className="text-right flex-shrink-0 flex items-start gap-2">
+                      <div>
+                        <div className="text-base font-bold text-accent">{c.totalBtls} btls</div>
+                        <div className="text-[10px] text-gray-500">{c.nbItems} produit{c.nbItems !== 1 ? 's' : ''}</div>
+                      </div>
+                      {isRestaurantAdmin && (
+                        <button
+                          type="button"
+                          aria-label="Supprimer"
+                          onClick={e => { e.stopPropagation(); setDeleteId(c.id); }}
+                          className="w-9 h-9 -mt-1 -mr-1 flex items-center justify-center text-gray-500 active:text-red-400 text-xl"
+                        >×</button>
+                      )}
                     </div>
                   </div>
                 </li>

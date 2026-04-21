@@ -141,13 +141,15 @@ export default function AdminUsers() {
         <ul className="space-y-2">
           {users.map((u) => (
             <li key={u.id} className="card p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-white font-medium">{u.nom}</span>
-                  <span className="text-gray-400 text-sm ml-2">{u.email}</span>
-                  {u.role === 'SuperAdmin' && <span className="badge ml-2 text-xs text-accent">Super Admin</span>}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-white font-medium break-words">{u.nom}</span>
+                    {u.role === 'SuperAdmin' && <span className="badge text-xs text-accent">Super Admin</span>}
+                  </div>
+                  <div className="text-gray-400 text-sm break-all">{u.email}</div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-4 shrink-0 self-start">
                   <button onClick={() => openEdit(u)} className="text-accent hover:underline text-sm">Modifier</button>
                   <button onClick={() => handleDelete(u.id)} className="text-red-400 hover:text-red-300 text-sm">Supprimer</button>
                 </div>

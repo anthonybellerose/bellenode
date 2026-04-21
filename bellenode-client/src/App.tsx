@@ -19,7 +19,6 @@ import Mappings from './pages/Mappings';
 import Objectifs from './pages/Objectifs';
 import AdminRestaurants from './pages/Admin/AdminRestaurants';
 import AdminUsers from './pages/Admin/AdminUsers';
-import JoinRequests from './pages/Admin/JoinRequests';
 import Invites from './pages/Admin/Invites';
 import Inventaire from './pages/Inventaire';
 import Commandes from './pages/Commandes';
@@ -83,9 +82,6 @@ export default function App() {
         <Route path="/admin/employees" element={
           <RequireRestaurantAdmin><AdminEmployees /></RequireRestaurantAdmin>
         }/>
-        <Route path="/admin/join-requests" element={
-          <RequireRestaurantAdmin><JoinRequests /></RequireRestaurantAdmin>
-        } />
         <Route path="/admin/invites" element={
           <RequireRestaurantAdmin><Invites /></RequireRestaurantAdmin>
         } />
