@@ -153,9 +153,9 @@ public class ScanController : BellenodeControllerBase
             if (line.StartsWith("#")) continue;
 
             var upper = line.ToUpperInvariant();
-            if (upper is "+" or "ADD") { currentMode = "+"; continue; }
-            if (upper is "-" or "REM") { currentMode = "-"; continue; }
-            if (upper is "=" or "SET") { currentMode = "="; continue; }
+            if (upper is "+" or "A" or "ADD") { currentMode = "+"; continue; }
+            if (upper is "-" or "R" or "REM" or "REMOVE") { currentMode = "-"; continue; }
+            if (upper is "=" or "S" or "SET") { currentMode = "="; continue; }
 
             ops.Add(new RawOp(currentMode, line, 1));
         }
@@ -166,9 +166,9 @@ public class ScanController : BellenodeControllerBase
     private static ScanMode? ParseMode(string raw) =>
         raw?.Trim().ToUpperInvariant() switch
         {
-            "+" or "ADD" => ScanMode.Add,
-            "-" or "REM" or "REMOVE" => ScanMode.Remove,
-            "=" or "SET" => ScanMode.Set,
+            "+" or "A" or "ADD" => ScanMode.Add,
+            "-" or "R" or "REM" or "REMOVE" => ScanMode.Remove,
+            "=" or "S" or "SET" => ScanMode.Set,
             _ => null
         };
 }

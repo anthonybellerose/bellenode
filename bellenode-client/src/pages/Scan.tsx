@@ -39,17 +39,17 @@ export default function Scan() {
       if (!trimmed) return;
 
       const upper = trimmed.toUpperCase();
-      if (upper === '+' || upper === 'ADD') {
+      if (upper === '+' || upper === 'A' || upper === 'ADD') {
         setMode('+');
         setCodeInput('');
         return;
       }
-      if (upper === '-' || upper === 'REM') {
+      if (upper === '-' || upper === 'R' || upper === 'REM' || upper === 'REMOVE') {
         setMode('-');
         setCodeInput('');
         return;
       }
-      if (upper === '=' || upper === 'SET') {
+      if (upper === '=' || upper === 'S' || upper === 'SET') {
         setMode('=');
         setCodeInput('');
         return;
