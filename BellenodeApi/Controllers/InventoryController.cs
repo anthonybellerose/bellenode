@@ -139,28 +139,45 @@ public class InventoryController : BellenodeControllerBase
             .Where(o => o.RestaurantId == restaurantId)
             .ToDictionaryAsync(o => o.CodeUpc, o => o);
 
+        // Pending = items commandés mais pas encore reçus (et non backorder)
+        // Joint via CodeSaq -> Product.CodeUpc
+        var pendingRaw = await _db.CommandeSAQItems
+            .Where(i => i.Commande.RestaurantId == restaurantId
+                     && !i.IsBackorder
+                     && i.QuantiteRecue < i.Quantite)
+            .Select(i => new { i.CodeSaq, Manque = i.Quantite - i.QuantiteRecue })
+            .ToListAsync();
+        var pendingBySaq = pendingRaw
+            .GroupBy(x => x.CodeSaq)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.Manque));
+        var pendingByUpc = products
+            .Where(p => p.CodeSaq != null && pendingBySaq.ContainsKey(p.CodeSaq))
+            .ToDictionary(p => p.CodeUpc, p => pendingBySaq[p.CodeSaq!]);
+
         var rows = products.Select(p =>
         {
             var qty = invMap.TryGetValue(p.CodeUpc, out var q) ? q : 0;
+            var pending = pendingByUpc.TryGetValue(p.CodeUpc, out var pv) ? pv : 0;
+            var qtyVirtuelle = qty + pending; // stock + déjà en route
             objMap.TryGetValue(p.CodeUpc, out var obj);
             var minQty = obj?.MinQty ?? 0;
             var maxQty = obj?.MaxQty ?? 0;
             var lotEffectif = obj?.LotQty ?? p.LotQty ?? 1;
 
+            // Statut basé sur qty réelle (pas la virtuelle)
             string statut;
             if (minQty == 0 && maxQty == 0) statut = "ignore";
             else if (qty == 0) statut = "rupture";
             else if (qty < minQty) statut = "bas";
             else statut = "ok";
 
+            // À commander basé sur qtyVirtuelle pour ne pas re-commander ce qui arrive
             int aCommander = 0;
-            if (maxQty > 0 && qty < minQty)
+            if (maxQty > 0 && qtyVirtuelle < minQty)
             {
-                var besoin = maxQty - qty;
-                // Arrondi au multiple de lot le plus proche (demi-lot arrondit up).
+                var besoin = maxQty - qtyVirtuelle;
                 var lots = (int)Math.Round((double)besoin / lotEffectif, MidpointRounding.AwayFromZero);
-                // Garde-fou : jamais en-dessous du min. Il faut assez de lots pour atteindre minQty.
-                var lotsMin = (int)Math.Ceiling((double)(minQty - qty) / lotEffectif);
+                var lotsMin = (int)Math.Ceiling((double)(minQty - qtyVirtuelle) / lotEffectif);
                 if (lots < lotsMin) lots = lotsMin;
                 aCommander = lots * lotEffectif;
             }
@@ -173,6 +190,7 @@ public class InventoryController : BellenodeControllerBase
                 codeSaq = p.CodeSaq,
                 prix = p.Prix,
                 qtyActuelle = qty,
+                qtyPending = pending > 0 ? (int?)pending : null,
                 minQty = minQty > 0 ? (int?)minQty : null,
                 maxQty = maxQty > 0 ? (int?)maxQty : null,
                 lotQty = obj?.LotQty,

@@ -85,7 +85,10 @@ public partial class CommandesController : BellenodeControllerBase
             .Select(c => new {
                 c.Id, c.CreatedAt, c.CreatedBy, c.Note,
                 nbItems = c.Items.Count,
-                totalBtls = c.Items.Sum(i => i.Quantite)
+                totalBtls = c.Items.Sum(i => i.Quantite),
+                totalRecues = c.Items.Sum(i => i.QuantiteRecue),
+                nbBackorder = c.Items.Count(i => i.IsBackorder),
+                complete = c.Items.All(i => i.IsBackorder || i.QuantiteRecue >= i.Quantite)
             })
             .ToListAsync();
 
@@ -125,6 +128,7 @@ public partial class CommandesController : BellenodeControllerBase
             },
             items = commande.Items.Select(i => new {
                 i.Id, i.CodeSaq, i.NomProduit, i.Volume, i.Quantite,
+                i.QuantiteRecue, i.IsBackorder,
                 prixUnitaire = prixByCodeSaq.TryGetValue(i.CodeSaq, out var px) ? px : null
             }).OrderBy(i => i.NomProduit).ToList()
         });
@@ -167,6 +171,154 @@ public partial class CommandesController : BellenodeControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { commande.Id, nbItems = commande.Items.Count, totalBtls = commande.Items.Sum(i => i.Quantite) });
+    }
+
+    public record ReceiveItemInput(int ItemId, int QtyReceived, bool MarkBackorder);
+    public record ReceiveCommandeInput(List<ReceiveItemInput> Items, string? Note);
+
+    // POST /api/commandes/{id}/receive
+    [HttpPost("{id}/receive")]
+    public async Task<IActionResult> Receive(int id, [FromBody] ReceiveCommandeInput body)
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var commande = await _db.CommandesSAQ
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.Id == id && c.RestaurantId == restaurantId);
+        if (commande is null) return NotFound();
+
+        var itemsById = commande.Items.ToDictionary(i => i.Id);
+
+        // Map CodeSaq -> CodeUpc via Product (pour maj inventaire)
+        var codesSaq = commande.Items.Select(i => i.CodeSaq).Distinct().ToList();
+        var productsBySaq = await _db.Products
+            .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
+            .ToDictionaryAsync(p => p.CodeSaq!);
+
+        // Crée un batch "Réception commande #X"
+        var batch = new ScanBatch
+        {
+            RestaurantId = restaurantId.Value,
+            Note = body.Note ?? $"Réception commande #{id}",
+            CreatedBy = User.FindFirst("nom")?.Value ?? User.Identity?.Name,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        int totalReceived = 0;
+        var affectedCodes = new List<string>();
+        foreach (var inp in body.Items ?? new())
+        {
+            if (!itemsById.TryGetValue(inp.ItemId, out var item)) continue;
+
+            item.IsBackorder = inp.MarkBackorder;
+            if (inp.QtyReceived > 0)
+            {
+                item.QuantiteRecue += inp.QtyReceived;
+                totalReceived += inp.QtyReceived;
+
+                if (productsBySaq.TryGetValue(item.CodeSaq, out var product))
+                    affectedCodes.Add(product.CodeUpc);
+            }
+        }
+
+        // Maj inventaire si des items ont été reçus
+        if (totalReceived > 0 && affectedCodes.Count > 0)
+        {
+            var existing = await _db.Inventory
+                .Where(i => i.RestaurantId == restaurantId && affectedCodes.Contains(i.Code))
+                .ToDictionaryAsync(i => i.Code);
+
+            foreach (var inp in body.Items ?? new())
+            {
+                if (!itemsById.TryGetValue(inp.ItemId, out var item)) continue;
+                if (inp.QtyReceived <= 0) continue;
+                if (!productsBySaq.TryGetValue(item.CodeSaq, out var product)) continue;
+
+                if (!existing.TryGetValue(product.CodeUpc, out var inv))
+                {
+                    inv = new InventoryItem
+                    {
+                        Code = product.CodeUpc,
+                        RestaurantId = restaurantId.Value,
+                        Quantite = 0,
+                        IsReferenced = true
+                    };
+                    _db.Inventory.Add(inv);
+                    existing[product.CodeUpc] = inv;
+                }
+
+                var qtyAvant = inv.Quantite;
+                inv.Quantite += inp.QtyReceived;
+                inv.UpdatedAt = DateTime.UtcNow;
+                inv.IsReferenced = true;
+
+                batch.Operations.Add(new ScanOperation
+                {
+                    Mode = ScanMode.Add,
+                    Code = product.CodeUpc,
+                    Quantite = inp.QtyReceived,
+                    IsReferenced = true,
+                    QtyAvant = qtyAvant,
+                    QtyApres = inv.Quantite
+                });
+            }
+
+            batch.LignesOps = batch.Operations.Count;
+            batch.ProduitsTouches = batch.Operations.Select(o => o.Code).Distinct().Count();
+            batch.TotalAjouts = batch.Operations.Sum(o => o.Quantite);
+            _db.ScanBatches.Add(batch);
+        }
+
+        await _db.SaveChangesAsync();
+
+        var complete = commande.Items.All(i => i.IsBackorder || i.QuantiteRecue >= i.Quantite);
+        return Ok(new { ok = true, totalReceived, batchId = batch.Id > 0 ? (int?)batch.Id : null, complete });
+    }
+
+    // POST /api/commandes/items/{itemId}/backorder
+    [HttpPost("items/{itemId}/backorder")]
+    public async Task<IActionResult> ToggleBackorder(int itemId, [FromBody] ToggleBackorderInput body)
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var item = await _db.CommandeSAQItems
+            .Include(i => i.Commande)
+            .FirstOrDefaultAsync(i => i.Id == itemId && i.Commande.RestaurantId == restaurantId);
+        if (item is null) return NotFound();
+
+        item.IsBackorder = body.IsBackorder;
+        await _db.SaveChangesAsync();
+        return Ok(new { ok = true });
+    }
+    public record ToggleBackorderInput(bool IsBackorder);
+
+    // GET /api/commandes/pending-items
+    // Liste tous les items non encore entièrement reçus (et non backorder)
+    [HttpGet("pending-items")]
+    public async Task<IActionResult> PendingItems()
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var items = await _db.CommandeSAQItems
+            .Where(i => i.Commande.RestaurantId == restaurantId
+                     && !i.IsBackorder
+                     && i.QuantiteRecue < i.Quantite)
+            .OrderBy(i => i.Commande.CreatedAt)
+            .ThenBy(i => i.NomProduit)
+            .Select(i => new {
+                i.Id,
+                commandeId = i.CommandeId,
+                commandeDate = i.Commande.CreatedAt,
+                i.CodeSaq, i.NomProduit, i.Volume,
+                i.Quantite, i.QuantiteRecue,
+                qtyManquante = i.Quantite - i.QuantiteRecue
+            })
+            .ToListAsync();
+
+        return Ok(items);
     }
 
     // DELETE /api/commandes/{id}

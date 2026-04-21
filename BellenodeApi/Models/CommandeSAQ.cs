@@ -21,4 +21,6 @@ public class CommandeSAQItem
     [Required, MaxLength(200)] public string NomProduit { get; set; } = "";
     [MaxLength(50)] public string? Volume { get; set; }
     public int Quantite { get; set; }
+    public int QuantiteRecue { get; set; } = 0;
+    public bool IsBackorder { get; set; } = false;
 }

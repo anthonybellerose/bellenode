@@ -7,6 +7,7 @@ import JoinInvite from './pages/JoinInvite';
 import SelectRestaurant from './pages/SelectRestaurant';
 import Profil from './pages/Profil';
 import Stats from './pages/Stats';
+import NonRecus from './pages/NonRecus';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="/commandes" element={<Commandes />} />
         <Route path="/stats" element={<Stats />} />
         <Route path="/commandes/:id" element={<CommandeDetail />} />
+        <Route path="/non-recus" element={<NonRecus />} />
         <Route path="/profil" element={<Profil />} />
 
         <Route path="/admin/employees" element={

@@ -16,6 +16,7 @@ export default function Layout() {
     { to: '/inventaire', label: 'Inventaire', icon: '📦' },
     { to: '/batches', label: 'Historique', icon: '📋' },
     { to: '/commandes', label: 'Commandes', icon: '📄' },
+    { to: '/non-recus', label: 'Non reçus', icon: '⏳' },
     { to: '/stats', label: 'Statistiques', icon: '📈' },
     ...(isRestaurantAdmin
       ? [

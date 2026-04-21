@@ -164,6 +164,14 @@ export const CommandesApi = {
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   },
+  receive: (id: number, items: { itemId: number; qtyReceived: number; markBackorder: boolean }[], note?: string) =>
+    api.post<{ ok: boolean; totalReceived: number; batchId?: number | null; complete: boolean }>(
+      `/commandes/${id}/receive`, { items, note }
+    ).then(r => r.data),
+  toggleBackorder: (itemId: number, isBackorder: boolean) =>
+    api.post<{ ok: boolean }>(`/commandes/items/${itemId}/backorder`, { isBackorder }).then(r => r.data),
+  pendingItems: () =>
+    api.get<import('../types').PendingCommandeItem[]>('/commandes/pending-items').then(r => r.data),
 };
 
 export interface StatsData {

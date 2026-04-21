@@ -57,6 +57,7 @@ export interface ObjectifRow {
   codeSaq?: string | null;
   prix?: number | null;
   qtyActuelle: number;
+  qtyPending?: number | null;
   minQty?: number | null;
   maxQty?: number | null;
   lotQty?: number | null;
@@ -145,6 +146,9 @@ export interface CommandeSummary {
   note?: string | null;
   nbItems: number;
   totalBtls: number;
+  totalRecues: number;
+  nbBackorder: number;
+  complete: boolean;
 }
 
 export interface CommandeItemType {
@@ -153,7 +157,21 @@ export interface CommandeItemType {
   nomProduit: string;
   volume?: string | null;
   quantite: number;
+  quantiteRecue: number;
+  isBackorder: boolean;
   prixUnitaire?: number | null;
+}
+
+export interface PendingCommandeItem {
+  id: number;
+  commandeId: number;
+  commandeDate: string;
+  codeSaq: string;
+  nomProduit: string;
+  volume?: string | null;
+  quantite: number;
+  quantiteRecue: number;
+  qtyManquante: number;
 }
 
 export interface CommandeDetail {
