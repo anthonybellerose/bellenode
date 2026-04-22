@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ProductsApi, ScanApi, CommandesApi } from '../api/client';
-import type { RawOp, ScanModeString, PendingCommandeItem } from '../types';
+import type { Product, RawOp, ScanModeString, PendingCommandeItem } from '../types';
 import BarcodeScanner from '../components/BarcodeScanner';
 
 interface ScanLine extends RawOp {
@@ -25,7 +25,11 @@ export default function Scan() {
   const [cameraSupported] = useState(() => typeof window !== 'undefined' && 'BarcodeDetector' in window);
   const [pendingBySaq, setPendingBySaq] = useState<Record<string, PendingCommandeItem[]>>({});
   const [receiving, setReceiving] = useState(false);
+  const [showNameSearch, setShowNameSearch] = useState(false);
+  const [nameSearch, setNameSearch] = useState('');
+  const [nameResults, setNameResults] = useState<Product[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const nameSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -53,6 +57,32 @@ export default function Scan() {
   useEffect(() => {
     localStorage.setItem('bellenode.user', user);
   }, [user]);
+
+  useEffect(() => {
+    if (!nameSearch.trim()) { setNameResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const results = await ProductsApi.list(nameSearch.trim());
+        setNameResults(results.slice(0, 8));
+      } catch { setNameResults([]); }
+    }, 200);
+    return () => clearTimeout(t);
+  }, [nameSearch]);
+
+  function addFromProduct(p: Product) {
+    let pendingMatch: ScanLine['pendingMatch'] = null;
+    if (mode === '+' && p.codeSaq && pendingBySaq[p.codeSaq]?.length) {
+      const first = pendingBySaq[p.codeSaq][0];
+      pendingMatch = { commandeId: first.commandeId, itemId: first.id, commandeDate: first.commandeDate, restant: first.qtyManquante };
+    }
+    setLines(prev => [
+      { tempId: Date.now() + Math.random(), mode, code: p.codeUpc, quantite: 1, nom: p.nom, unknown: false, pendingMatch },
+      ...prev,
+    ]);
+    setNameSearch('');
+    setNameResults([]);
+    nameSearchRef.current?.focus();
+  }
 
   const addLine = useCallback(
     async (code: string) => {
@@ -262,6 +292,24 @@ export default function Scan() {
           {modeButton('=', '= Fixer', 'bg-accent')}
         </div>
 
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { setShowNameSearch(false); setTimeout(() => inputRef.current?.focus(), 50); }}
+            className={`px-3 py-2 rounded text-sm font-medium transition-colors ${!showNameSearch ? 'bg-accent text-white' : 'bg-bg-elevated text-gray-400 hover:text-white'}`}
+          >
+            Code
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowNameSearch(true); setTimeout(() => nameSearchRef.current?.focus(), 50); }}
+            className={`px-3 py-2 rounded text-sm font-medium transition-colors ${showNameSearch ? 'bg-accent text-white' : 'bg-bg-elevated text-gray-400 hover:text-white'}`}
+          >
+            Par nom
+          </button>
+        </div>
+
+        {!showNameSearch ? (
         <div className="flex gap-2 items-stretch">
           <div className="relative flex-1">
             <input
@@ -295,6 +343,44 @@ export default function Scan() {
             +
           </button>
         </div>
+        ) : (
+        <div className="relative">
+          <input
+            ref={nameSearchRef}
+            type="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            placeholder="Rechercher un produit par nom..."
+            value={nameSearch}
+            onChange={(e) => setNameSearch(e.target.value)}
+            className="w-full text-lg"
+          />
+          {nameResults.length > 0 && (
+            <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-bg-elevated border border-bg-border rounded-md shadow-xl overflow-hidden">
+              {nameResults.map(p => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); addFromProduct(p); }}
+                    className="w-full text-left px-4 py-3 hover:bg-bg-border active:bg-bg-border flex items-center gap-3"
+                    style={{ minHeight: 48 }}
+                  >
+                    <span className="flex-1 text-sm text-gray-100">{p.nom}</span>
+                    <span className="text-xs text-gray-500 font-mono shrink-0">{p.codeUpc}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {nameSearch.trim() && nameResults.length === 0 && (
+            <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-bg-elevated border border-bg-border rounded-md px-4 py-3 text-sm text-gray-500">
+              Aucun résultat pour « {nameSearch} »
+            </div>
+          )}
+        </div>
+        )}
 
         <div className="flex flex-wrap gap-2 justify-between items-center">
           <div className="text-xs text-gray-500 flex gap-3 flex-wrap">

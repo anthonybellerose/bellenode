@@ -63,6 +63,7 @@ public class ScanController : BellenodeControllerBase
         await _db.SaveChangesAsync();
 
         var touchedCodes = new HashSet<string>();
+        var setInitialized = new HashSet<string>();
         var totalAdds = 0;
         var totalSubs = 0;
 
@@ -99,7 +100,15 @@ public class ScanController : BellenodeControllerBase
                     totalSubs += qty;
                     break;
                 case ScanMode.Set:
-                    inv.Quantite = qty;
+                    if (!setInitialized.Contains(code))
+                    {
+                        inv.Quantite = qty;
+                        setInitialized.Add(code);
+                    }
+                    else
+                    {
+                        inv.Quantite += qty;
+                    }
                     break;
             }
 

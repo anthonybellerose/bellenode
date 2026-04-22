@@ -152,14 +152,14 @@ export default function CommandeDetailPage() {
       )}
 
       {/* Feuille de commande */}
-      <div id="commande-print" className="bg-white text-gray-900 rounded-lg p-6 md:p-10 space-y-6 print:rounded-none print:p-8 print:shadow-none">
+      <div id="commande-print" className="card md:bg-white md:text-gray-900 p-4 md:p-10 space-y-6 print:rounded-none print:p-8 print:shadow-none print:bg-white print:text-gray-900">
 
         {/* En-tête */}
-        <div className="border-b-2 border-gray-800 pb-4">
-          <h1 className="text-2xl font-bold text-center uppercase tracking-wide mb-4">
+        <div className="border-b-2 border-bg-border md:border-gray-800 pb-4">
+          <h1 className="text-xl md:text-2xl font-bold text-center uppercase tracking-wide mb-4 text-gray-100 md:text-gray-900 print:text-gray-900">
             Commande SAQ
           </h1>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
             <InfoLine label="Établissement" value={cfg.nomEtablissement} />
             <InfoLine label="Numéro de client" value={cfg.numeroClient} />
             <InfoLine label="Téléphone" value={cfg.telephone} />
@@ -173,82 +173,119 @@ export default function CommandeDetailPage() {
           </div>
         </div>
 
-        {/* Tableau des items */}
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b-2 border-gray-800">
-              <th className="text-left py-2 pr-4 font-semibold w-28">Code SAQ</th>
-              <th className="text-left py-2 pr-4 font-semibold">Nom du produit</th>
-              <th className="text-left py-2 pr-4 font-semibold w-20">Volume</th>
-              <th className="text-right py-2 pr-4 font-semibold w-20">Qté</th>
-              <th className="text-right py-2 pr-4 font-semibold w-20 print:hidden">Reçu</th>
-              {hasAnyPrix && (
-                <>
-                  <th className="text-right py-2 pr-4 font-semibold w-24">Prix unit.</th>
-                  <th className="text-right py-2 font-semibold w-28">Sous-total</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {commande.items.map((item, i) => {
-              const sousTotal = (item.prixUnitaire ?? 0) * item.quantite;
-              const itemComplete = item.isBackorder || item.quantiteRecue >= item.quantite;
-              return (
-                <tr key={item.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                  <td className="py-2 pr-4 font-mono text-gray-600">{item.codeSaq}</td>
-                  <td className="py-2 pr-4">
+        {/* Mobile : cards */}
+        <ul className="md:hidden divide-y divide-bg-border">
+          {commande.items.map(item => {
+            const itemComplete = item.isBackorder || item.quantiteRecue >= item.quantite;
+            return (
+              <li key={item.id} className="py-3 space-y-0.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium text-gray-100 flex-1">
                     {item.nomProduit.replace(/\s*-\s*\d.*$/, '')}
-                    {item.isBackorder && <span className="ml-2 text-xs text-red-600 font-semibold print:hidden">(Backorder)</span>}
-                  </td>
-                  <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
-                  <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
-                  <td className="py-2 pr-4 text-right print:hidden">
-                    <span className={itemComplete ? 'text-green-700 font-semibold' : item.quantiteRecue > 0 ? 'text-yellow-700' : 'text-gray-400'}>
-                      {item.isBackorder ? 'BO' : `${item.quantiteRecue}/${item.quantite}`}
-                    </span>
-                  </td>
-                  {hasAnyPrix && (
-                    <>
-                      <td className="py-2 pr-4 text-right text-gray-600">
-                        {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '—'}
-                      </td>
-                      <td className="py-2 text-right font-medium">
-                        {item.prixUnitaire != null ? fmt$(sousTotal) : '—'}
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-gray-800">
-              <td colSpan={3} className="py-2 pr-4 font-semibold text-right">Total bouteilles :</td>
-              <td className="py-2 pr-4 text-right font-bold text-lg">{totalBtls}</td>
-              <td className="py-2 pr-4 text-right text-sm print:hidden">
-                <span className={complete ? 'text-green-700' : 'text-yellow-700'}>{totalRecues}/{totalBtls}</span>
-              </td>
-              {hasAnyPrix && (
-                <>
-                  <td className="py-2 pr-4 text-right font-semibold">Total estimé :</td>
-                  <td className="py-2 text-right font-bold text-lg">{fmt$(totalEstime)}</td>
-                </>
-              )}
-            </tr>
-            {hasAnyPrix && (
-              <tr>
-                <td colSpan={7} className="pt-2 text-xs text-gray-500 italic">
-                  * Prix estimé basé sur le prix de base du produit. Peut varier selon le prix SAQ réel.
-                </td>
+                  </span>
+                  <span className="text-base font-bold text-gray-100 shrink-0">{item.quantite}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-400">
+                  <span className="font-mono">{item.codeSaq}</span>
+                  {item.volume && <span>{item.volume}</span>}
+                  {hasAnyPrix && item.prixUnitaire != null && <span>{fmt$(item.prixUnitaire)} / u</span>}
+                  <span className={`ml-auto font-medium ${itemComplete ? 'text-green-400' : item.quantiteRecue > 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                    {item.isBackorder ? 'Backorder' : `Reçu ${item.quantiteRecue}/${item.quantite}`}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+          <li className="py-3 flex items-center justify-between text-sm font-semibold text-gray-100">
+            <span>Total bouteilles</span>
+            <span>{totalBtls}</span>
+          </li>
+          {hasAnyPrix && (
+            <li className="py-2 flex items-center justify-between text-sm font-semibold text-gray-100">
+              <span>Total estimé</span>
+              <span>{fmt$(totalEstime)}</span>
+            </li>
+          )}
+        </ul>
+
+        {/* Desktop : tableau */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-800">
+                <th className="text-left py-2 pr-4 font-semibold w-28">Code SAQ</th>
+                <th className="text-left py-2 pr-4 font-semibold">Nom du produit</th>
+                <th className="text-left py-2 pr-4 font-semibold w-20">Volume</th>
+                <th className="text-right py-2 pr-4 font-semibold w-20">Qté</th>
+                <th className="text-right py-2 pr-4 font-semibold w-20 print:hidden">Reçu</th>
+                {hasAnyPrix && (
+                  <>
+                    <th className="text-right py-2 pr-4 font-semibold w-24">Prix unit.</th>
+                    <th className="text-right py-2 font-semibold w-28">Sous-total</th>
+                  </>
+                )}
               </tr>
-            )}
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {commande.items.map((item, i) => {
+                const sousTotal = (item.prixUnitaire ?? 0) * item.quantite;
+                const itemComplete = item.isBackorder || item.quantiteRecue >= item.quantite;
+                return (
+                  <tr key={item.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                    <td className="py-2 pr-4 font-mono text-gray-600">{item.codeSaq}</td>
+                    <td className="py-2 pr-4">
+                      {item.nomProduit.replace(/\s*-\s*\d.*$/, '')}
+                      {item.isBackorder && <span className="ml-2 text-xs text-red-600 font-semibold print:hidden">(Backorder)</span>}
+                    </td>
+                    <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
+                    <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
+                    <td className="py-2 pr-4 text-right print:hidden">
+                      <span className={itemComplete ? 'text-green-700 font-semibold' : item.quantiteRecue > 0 ? 'text-yellow-700' : 'text-gray-400'}>
+                        {item.isBackorder ? 'BO' : `${item.quantiteRecue}/${item.quantite}`}
+                      </span>
+                    </td>
+                    {hasAnyPrix && (
+                      <>
+                        <td className="py-2 pr-4 text-right text-gray-600">
+                          {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '—'}
+                        </td>
+                        <td className="py-2 text-right font-medium">
+                          {item.prixUnitaire != null ? fmt$(sousTotal) : '—'}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-800">
+                <td colSpan={3} className="py-2 pr-4 font-semibold text-right">Total bouteilles :</td>
+                <td className="py-2 pr-4 text-right font-bold text-lg">{totalBtls}</td>
+                <td className="py-2 pr-4 text-right text-sm print:hidden">
+                  <span className={complete ? 'text-green-700' : 'text-yellow-700'}>{totalRecues}/{totalBtls}</span>
+                </td>
+                {hasAnyPrix && (
+                  <>
+                    <td className="py-2 pr-4 text-right font-semibold">Total estimé :</td>
+                    <td className="py-2 text-right font-bold text-lg">{fmt$(totalEstime)}</td>
+                  </>
+                )}
+              </tr>
+              {hasAnyPrix && (
+                <tr>
+                  <td colSpan={7} className="pt-2 text-xs text-gray-500 italic">
+                    * Prix estimé basé sur le prix de base du produit. Peut varier selon le prix SAQ réel.
+                  </td>
+                </tr>
+              )}
+            </tfoot>
+          </table>
+        </div>
 
         {commande.note && (
-          <div className="text-sm text-gray-600 border-t pt-4">
-            <span className="font-semibold">Note :</span> {commande.note}
+          <div className="text-sm border-t border-bg-border md:border-gray-200 pt-4 text-gray-400 md:text-gray-600 print:text-gray-600">
+            <span className="font-semibold text-gray-100 md:text-gray-900 print:text-gray-900">Note :</span> {commande.note}
           </div>
         )}
       </div>
@@ -259,8 +296,8 @@ export default function CommandeDetailPage() {
 function InfoLine({ label, value, bold }: { label: string; value?: string | null; bold?: boolean }) {
   return (
     <div className="flex gap-2">
-      <span className="text-gray-500 min-w-36">{label} :</span>
-      <span className={bold ? 'font-bold' : 'font-medium'}>{value || '—'}</span>
+      <span className="text-gray-400 md:text-gray-500 print:text-gray-500 min-w-32">{label} :</span>
+      <span className={`text-gray-100 md:text-gray-900 print:text-gray-900 ${bold ? 'font-bold' : 'font-medium'}`}>{value || '—'}</span>
     </div>
   );
 }

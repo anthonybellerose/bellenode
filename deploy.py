@@ -75,6 +75,9 @@ def upload_recursive(ftp: FTP, local_root: Path):
         rel = local.relative_to(local_root).as_posix()
         if rel in SKIP_FILES:
             continue
+        # Ignorer les sous-dossiers "publish/" imbriqués (artefacts dotnet publish cumulatifs)
+        if "publish" in rel.split("/")[:-1]:
+            continue
 
         remote_dir = "/".join(rel.split("/")[:-1])
         if remote_dir and remote_dir not in created_dirs:
