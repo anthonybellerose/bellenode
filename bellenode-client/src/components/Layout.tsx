@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,6 +9,23 @@ export default function Layout() {
   const { user, restaurant, isRestaurantAdmin, logout } = useAuth();
 
   const isSuperAdmin = user?.role === 'SuperAdmin';
+
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (drawerOpen) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    if (touchStartX.current < 40 && dx > 60 && dy < 100) {
+      setDrawerOpen(true);
+    }
+  }
 
   const allNavItems = [
     { to: '/', label: 'Dashboard', icon: '📊' },
@@ -43,7 +60,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="flex min-h-screen bg-bg" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-60 bg-bg-soft border-r border-bg-border flex-col fixed inset-y-0 left-0">
         <div className="px-5 py-5 border-b border-bg-border">
