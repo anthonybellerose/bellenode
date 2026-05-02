@@ -31,7 +31,7 @@ public class EmailService
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            _log.LogWarning("Resend API key non configurée — email pour {to} non envoyé", toEmail);
+            _log.LogWarning("Resend API key non configurée, email pour {to} non envoyé", toEmail);
             return;
         }
 

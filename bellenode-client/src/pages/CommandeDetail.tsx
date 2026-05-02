@@ -80,7 +80,7 @@ export default function CommandeDetailPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar — masqué à l'impression */}
+      {/* Toolbar - masqué à l'impression */}
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <button className="btn btn-ghost" onClick={() => navigate('/commandes')}>← Retour</button>
         <span className="text-gray-400 text-sm flex-1">
@@ -263,7 +263,7 @@ export default function CommandeDetailPage() {
                       {item.nomProduit.replace(/\s*-\s*\d.*$/, '')}
                       {item.isBackorder && <span className="ml-2 text-xs text-red-600 font-semibold print:hidden">(Backorder)</span>}
                     </td>
-                    <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
+                    <td className="py-2 pr-4 text-gray-500">{item.volume ?? '-'}</td>
                     <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
                     <td className="py-2 pr-4 text-right font-bold text-accent">{formatQte(item.quantite, item.lotEffectif)}</td>
                     <td className="py-2 pr-4 text-right print:hidden">
@@ -274,10 +274,10 @@ export default function CommandeDetailPage() {
                     {hasAnyPrix && (
                       <>
                         <td className="py-2 pr-4 text-right text-gray-600">
-                          {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '—'}
+                          {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '-'}
                         </td>
                         <td className="py-2 text-right font-medium">
-                          {item.prixUnitaire != null ? fmt$(sousTotal) : '—'}
+                          {item.prixUnitaire != null ? fmt$(sousTotal) : '-'}
                         </td>
                       </>
                     )}
@@ -324,7 +324,7 @@ function InfoLine({ label, value, bold }: { label: string; value?: string | null
   return (
     <div className="flex gap-2">
       <span className="text-gray-400 md:text-gray-500 print:text-gray-500 min-w-32">{label} :</span>
-      <span className={`text-gray-100 md:text-gray-900 print:text-gray-900 ${bold ? 'font-bold' : 'font-medium'}`}>{value || '—'}</span>
+      <span className={`text-gray-100 md:text-gray-900 print:text-gray-900 ${bold ? 'font-bold' : 'font-medium'}`}>{value || '-'}</span>
     </div>
   );
 }

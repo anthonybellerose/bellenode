@@ -43,7 +43,7 @@ export default function NonReferenced() {
       <header className="hidden md:block">
         <h2 className="page-title">Non référencés</h2>
         <p className="page-subtitle">
-          Codes scannés qui ne sont pas encore dans le catalogue — {items.length}
+          Codes scannés qui ne sont pas encore dans le catalogue : {items.length}
         </p>
       </header>
 

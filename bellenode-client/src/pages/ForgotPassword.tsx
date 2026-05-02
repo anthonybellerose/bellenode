@@ -14,7 +14,7 @@ export default function ForgotPassword() {
       await AuthApi.forgotPassword(email);
       setDone(true);
     } catch {
-      // Réponse 200 même si email inconnu — on affiche quand même le message
+      // Réponse 200 même si email inconnu, on affiche quand même le message
       setDone(true);
     } finally {
       setLoading(false);
@@ -41,7 +41,7 @@ export default function ForgotPassword() {
           ) : (
             <form onSubmit={submit} className="space-y-5">
               <p className="text-sm text-gray-400">
-                Entre ton courriel — on t'enverra un lien pour choisir un nouveau mot de passe.
+                Entre ton courriel, on t'enverra un lien pour choisir un nouveau mot de passe.
               </p>
               <div>
                 <label className="block text-sm text-gray-400 mb-1.5">Courriel</label>

@@ -76,6 +76,43 @@ export default function Stats() {
         <StatCard label="Rupture" value={String(data.statut.rupture)} tone="red" />
       </div>
 
+      {/* Valeur vs objectif */}
+      {data.valeurObjectif > 0 && (() => {
+        const ecart = data.valeurAvecObjectif - data.valeurObjectif;
+        const pct = Math.round((data.valeurAvecObjectif / data.valeurObjectif) * 100);
+        const isAbove = ecart >= 0;
+        return (
+          <section className="card p-4">
+            <h3 className="font-semibold text-gray-200 mb-3 text-sm">Valeur vs objectif (max)</h3>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex-1 min-w-[140px]">
+                <div className="text-xs text-gray-500 mb-0.5">Actuel</div>
+                <div className="text-lg font-bold text-blue-400">{fmt$(data.valeurAvecObjectif)}</div>
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <div className="text-xs text-gray-500 mb-0.5">Objectif (max)</div>
+                <div className="text-lg font-bold text-gray-300">{fmt$(data.valeurObjectif)}</div>
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <div className="text-xs text-gray-500 mb-0.5">Écart</div>
+                <div className={`text-lg font-bold ${isAbove ? 'text-green-400' : 'text-red-400'}`}>
+                  {isAbove ? '+' : ''}{fmt$(ecart)}
+                </div>
+                <div className={`text-xs ${isAbove ? 'text-green-600' : 'text-red-600'}`}>{pct}% de l'objectif</div>
+              </div>
+              <div className="w-full md:w-48">
+                <div className="h-2 rounded-full bg-bg-elevated overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${isAbove ? 'bg-green-500' : 'bg-red-500'}`}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
       <div className="grid md:grid-cols-2 gap-4">
         {/* Donut statut */}
         <section className="card p-4">

@@ -46,7 +46,7 @@ export default function Products() {
       <header className="hidden md:flex items-center justify-between">
         <div>
           <h2 className="page-title">Produits</h2>
-          <p className="page-subtitle">Catalogue des bouteilles — {products.length} produit(s)</p>
+          <p className="page-subtitle">Catalogue des bouteilles : {products.length} produit(s)</p>
         </div>
         <button
           className="btn btn-primary"
@@ -93,12 +93,12 @@ export default function Products() {
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-100 truncate">{p.nom}</div>
                     <div className="font-mono text-[10px] text-gray-500 truncate">
-                      UPC {p.codeUpc} · SAQ {p.codeSaq ?? '—'}
+                      UPC {p.codeUpc} · SAQ {p.codeSaq ?? '-'}
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-sm font-semibold text-gray-200">
-                      {p.prix != null ? `${p.prix.toFixed(2)}$` : '—'}
+                      {p.prix != null ? `${p.prix.toFixed(2)}$` : '-'}
                     </div>
                     <div className="flex gap-2 mt-1 justify-end">
                       <button
@@ -138,9 +138,9 @@ export default function Products() {
                     <tr key={p.id}>
                       <td className="font-mono text-xs text-gray-400">{p.codeUpc}</td>
                       <td className="text-gray-100">{p.nom}</td>
-                      <td className="font-mono text-xs text-gray-400">{p.codeSaq ?? '—'}</td>
+                      <td className="font-mono text-xs text-gray-400">{p.codeSaq ?? '-'}</td>
                       <td className="text-right text-gray-300">
-                        {p.prix != null ? `${p.prix.toFixed(2)} $` : '—'}
+                        {p.prix != null ? `${p.prix.toFixed(2)} $` : '-'}
                       </td>
                       <td className="text-right">
                         <button

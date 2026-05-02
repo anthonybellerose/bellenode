@@ -37,7 +37,7 @@ export default function Invites() {
       </div>
 
       <p className="text-gray-400 text-sm mb-4">
-        Partagez un lien — la personne crée son compte et rejoint automatiquement votre restaurant. Valide 7 jours.
+        Partagez un lien, la personne crée son compte et rejoint automatiquement votre restaurant. Valide 7 jours.
       </p>
 
       {loading ? (

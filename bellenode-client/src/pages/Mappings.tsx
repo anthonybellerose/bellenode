@@ -45,7 +45,7 @@ export default function Mappings() {
         <div className="hidden md:block">
           <h2 className="page-title">Mappings caisses</h2>
           <p className="page-subtitle">
-            Codes de caisses et leur équivalent en bouteilles — {mappings.length}
+            Codes de caisses et leur équivalent en bouteilles : {mappings.length}
           </p>
         </div>
         <button
@@ -124,7 +124,7 @@ export default function Mappings() {
                       <td className="font-mono text-xs text-gray-300">{m.codeCaisse}</td>
                       <td className="font-mono text-xs text-gray-400">{m.codeUnite}</td>
                       <td className="text-gray-200">
-                        {m.nomUnite ?? <span className="text-gray-600">—</span>}
+                        {m.nomUnite ?? <span className="text-gray-600">-</span>}
                       </td>
                       <td className="text-right font-semibold text-accent">× {m.quantite}</td>
                       <td className="text-right">

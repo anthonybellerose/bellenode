@@ -376,13 +376,13 @@ public partial class CommandesController : BellenodeControllerBase
 
         var (excelBytes, commandeDate) = excelResult.Value;
 
-        var sujet = config.EmailSujet ?? $"Commande SAQ — {config.NomEtablissement ?? "Restaurant"} — {commandeDate}";
+        var sujet = config.EmailSujet ?? $"Commande SAQ - {config.NomEtablissement ?? "Restaurant"} - {commandeDate}";
         var messageHtml = string.IsNullOrWhiteSpace(config.EmailMessage)
             ? ""
             : $"<p style='white-space:pre-line'>{System.Net.WebUtility.HtmlEncode(config.EmailMessage)}</p><hr style='margin:20px 0;border:none;border-top:1px solid #e5e7eb'/>";
 
         var htmlBody = $@"<div style='font-family:Arial,sans-serif;color:#1a1a24'>
-<h2 style='color:#3b82f6'>Commande SAQ — {System.Net.WebUtility.HtmlEncode(config.NomEtablissement ?? "")}  </h2>
+<h2 style='color:#3b82f6'>Commande SAQ - {System.Net.WebUtility.HtmlEncode(config.NomEtablissement ?? "")}  </h2>
 {messageHtml}
 <p>Veuillez trouver en pièce jointe la commande SAQ du {commandeDate}.</p>
 <p style='color:#666;font-size:12px'>Envoyé automatiquement via Bellenode</p>
@@ -449,7 +449,7 @@ public partial class CommandesController : BellenodeControllerBase
         ws.Column(3).Width = 40; // Nom du produit
         ws.Column(4).Width = 12; // Format
 
-        // Logo SAQ — positionné sur A2 (rows 2-5, cols A-C)
+        // Logo SAQ - positionné sur A2 (rows 2-5, cols A-C)
         var asm = System.Reflection.Assembly.GetExecutingAssembly();
         using var logoStream = asm.GetManifestResourceStream("BellenodeApi.Resources.saq_logo.jpeg");
         if (logoStream != null)

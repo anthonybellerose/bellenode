@@ -166,7 +166,7 @@ public class AuthController : BellenodeControllerBase
             var link = $"{baseUrl}/reset-password?token={token}";
 
             var body = $@"<div style='font-family:Arial,sans-serif;color:#1a1a24'>
-<h2 style='color:#3b82f6'>Bellenode — Réinitialisation du mot de passe</h2>
+<h2 style='color:#3b82f6'>Bellenode - Réinitialisation du mot de passe</h2>
 <p>Bonjour {System.Net.WebUtility.HtmlEncode(user.Nom)},</p>
 <p>Clique sur le lien ci-dessous pour choisir un nouveau mot de passe. Ce lien expire dans 2 heures.</p>
 <p><a href='{link}' style='background:#3b82f6;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block'>Réinitialiser mon mot de passe</a></p>
@@ -174,7 +174,7 @@ public class AuthController : BellenodeControllerBase
 <p style='color:#666;font-size:12px'>Si tu n'as pas demandé cette réinitialisation, ignore cet email.</p>
 </div>";
 
-            await _email.SendAsync(user.Email, user.Nom, "Réinitialisation de mot de passe — Bellenode", body);
+            await _email.SendAsync(user.Email, user.Nom, "Réinitialisation de mot de passe - Bellenode", body);
         }
 
         return Ok(new { ok = true });

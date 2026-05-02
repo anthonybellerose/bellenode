@@ -22,7 +22,6 @@ export default function Scan() {
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraSupported] = useState(() => typeof window !== 'undefined' && 'BarcodeDetector' in window);
   const [pendingBySaq, setPendingBySaq] = useState<Record<string, PendingCommandeItem[]>>({});
   const [receiving, setReceiving] = useState(false);
   const [showNameSearch, setShowNameSearch] = useState(false);
@@ -49,7 +48,7 @@ export default function Scan() {
         map[k].sort((a, b) => a.commandeDate.localeCompare(b.commandeDate));
       }
       setPendingBySaq(map);
-    } catch { /* ignore — si pas de resto sélectionné par ex */ }
+    } catch { /* ignore - si pas de resto sélectionné par ex */ }
   }
 
   useEffect(() => { reloadPending(); }, []);
@@ -231,7 +230,7 @@ export default function Scan() {
       setLines([]);
       setNote('');
       setMsg(
-        `✅ Batch #${result.batchId} créé — ${result.produitsTouches} produits, +${result.totalAjouts} / -${result.totalRetraits}`,
+        `✅ Batch #${result.batchId} créé : ${result.produitsTouches} produits, +${result.totalAjouts} / -${result.totalRetraits}`,
       );
       setTimeout(() => navigate(`/batches/${result.batchId}`), 1500);
     } catch (e) {
@@ -330,8 +329,7 @@ export default function Scan() {
               type="button"
               onClick={() => setCameraOpen(true)}
               aria-label="Scanner avec la caméra"
-              className={`absolute right-0 top-0 h-full px-3 flex items-center justify-center text-xl transition-colors ${cameraSupported ? 'text-gray-400 hover:text-white' : 'text-gray-700 cursor-not-allowed'}`}
-              disabled={!cameraSupported}
+              className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-xl transition-colors text-gray-400 hover:text-white active:text-white"
             >
               📷
             </button>
@@ -465,7 +463,7 @@ export default function Scan() {
         );
       })()}
 
-      {/* Liste des lignes — cards sur mobile, table sur desktop */}
+      {/* Liste des lignes - cards sur mobile, table sur desktop */}
       <section className="card">
         <div className="px-4 py-3 border-b border-bg-border flex items-center justify-between">
           <h3 className="font-semibold text-base">Lignes ({lines.length})</h3>

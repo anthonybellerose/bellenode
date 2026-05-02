@@ -207,6 +207,27 @@ public class InventoryController : BellenodeControllerBase
         return Ok(rows);
     }
 
+    [HttpPost("reset")]
+    public async Task<IActionResult> Reset()
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+        if (!await IsRestaurantAdmin(_db, restaurantId.Value)) return Forbid();
+
+        var items = await _db.Inventory
+            .Where(i => i.RestaurantId == restaurantId)
+            .ToListAsync();
+
+        foreach (var item in items)
+        {
+            item.Quantite = 0;
+            item.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { reset = items.Count });
+    }
+
     public record ObjectifInput(int? MinQty, int? MaxQty, int? LotQty);
 
     [HttpPatch("objectifs/{codeUpc}")]
@@ -308,7 +329,7 @@ public class InventoryController : BellenodeControllerBase
         var ws = wb.AddWorksheet("Inventaire");
 
         // Titre
-        ws.Cell("A1").Value = $"Inventaire — {resto?.Nom ?? ""}";
+        ws.Cell("A1").Value = $"Inventaire - {resto?.Nom ?? ""}";
         ws.Range("A1:K1").Merge();
         ws.Cell("A1").Style.Font.SetBold(true).Font.SetFontSize(14);
         ws.Cell("A2").Value = $"Export du {DateTime.Now:yyyy-MM-dd HH:mm}";

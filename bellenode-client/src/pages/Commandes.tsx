@@ -183,8 +183,8 @@ export default function Commandes() {
                     <tr key={c.id} className="cursor-pointer" onClick={() => navigate(`/commandes/${c.id}`)}>
                       <td className="font-mono text-gray-400">#{c.id}</td>
                       <td>{new Date(c.createdAt).toLocaleDateString('fr-CA', { year:'numeric', month:'short', day:'numeric' })}</td>
-                      <td>{c.createdBy ?? '—'}</td>
-                      <td className="text-gray-400 italic">{c.note ?? '—'}</td>
+                      <td>{c.createdBy ?? '-'}</td>
+                      <td className="text-gray-400 italic">{c.note ?? '-'}</td>
                       <td className="text-right">{c.nbItems}</td>
                       <td className="text-right font-bold text-accent">{c.totalBtls}</td>
                       {isRestaurantAdmin && (
@@ -238,7 +238,7 @@ export default function Commandes() {
                       <tr key={i}>
                         <td className="text-gray-100">{item.nomProduit.replace(/\s*-\s*\d.*$/, '')}</td>
                         <td className="font-mono text-gray-400 text-xs">{item.codeSaq}</td>
-                        <td className="text-gray-400 text-xs">{item.volume ?? '—'}</td>
+                        <td className="text-gray-400 text-xs">{item.volume ?? '-'}</td>
                         <td>
                           <input type="number" inputMode="numeric" min={0}
                             value={item.quantite}
@@ -311,7 +311,7 @@ export default function Commandes() {
               <label className="block text-xs text-gray-400 mb-1">Objet du courriel</label>
               <input type="text" value={configForm.emailSujet ?? ''}
                 onChange={e => setConfigForm(f => ({ ...f, emailSujet: e.target.value || null }))}
-                placeholder="Commande SAQ — Le Pub 111" className="w-full" />
+                placeholder="Commande SAQ - Le Pub 111" className="w-full" />
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1">Message (optionnel)</label>

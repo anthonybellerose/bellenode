@@ -102,7 +102,7 @@ export default function Register() {
                 onChange={(e) => setForm({ ...form, restaurantId: e.target.value })}
                 className="w-full"
               >
-                <option value="">— Choisir un restaurant —</option>
+                <option value="">Choisir un restaurant</option>
                 {restaurants.map((r) => (
                   <option key={r.id} value={r.id}>{r.nom}</option>
                 ))}

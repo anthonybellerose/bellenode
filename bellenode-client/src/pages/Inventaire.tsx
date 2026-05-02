@@ -22,6 +22,7 @@ export default function Inventaire() {
   const [inventoryOnly, setInventoryOnly] = useState(true);
   const [editing, setEditing] = useState<ObjectifRow | null>(null);
   const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '' });
+  const [confirmReset, setConfirmReset] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -59,6 +60,12 @@ export default function Inventaire() {
     });
   }
 
+  async function doReset() {
+    await InventoryApi.reset();
+    setConfirmReset(false);
+    load();
+  }
+
   async function saveEdit() {
     if (!editing) return;
     const min = form.minQty.trim() === '' ? 0 : parseInt(form.minQty);
@@ -80,20 +87,32 @@ export default function Inventaire() {
             {rows.length} produits scannés · {counts.alerte} en alerte
           </p>
         </div>
-        <button
-          className="btn btn-ghost"
-          onClick={async () => {
-            try {
-              const dateStr = new Date().toISOString().slice(0, 10);
-              await InventoryApi.exportExcel(`inventaire-${dateStr}.xlsx`);
-            } catch { alert('Erreur lors de l\'export.'); }
-          }}
-        >
-          📊 Exporter Excel
-        </button>
+        <div className="flex gap-2">
+          {isRestaurantAdmin && (
+            <button className="btn btn-ghost text-red-400 hover:text-red-300" onClick={() => setConfirmReset(true)}>
+              Remettre à zéro
+            </button>
+          )}
+          <button
+            className="btn btn-ghost"
+            onClick={async () => {
+              try {
+                const dateStr = new Date().toISOString().slice(0, 10);
+                await InventoryApi.exportExcel(`inventaire-${dateStr}.xlsx`);
+              } catch { alert('Erreur lors de l\'export.'); }
+            }}
+          >
+            📊 Exporter Excel
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-2 items-center">
+        {isRestaurantAdmin && (
+          <button className="btn btn-ghost text-sm text-red-400 md:hidden" onClick={() => setConfirmReset(true)}>
+            Zéro
+          </button>
+        )}
         <button
           className="btn btn-ghost text-sm md:hidden"
           onClick={async () => {
@@ -163,9 +182,9 @@ export default function Inventaire() {
                       <div className={`text-2xl font-bold ${qtyColor(r)}`}>{r.qtyActuelle}</div>
                       {(r.minQty != null || r.maxQty != null) && (
                         <div className="text-[10px] text-gray-500 mt-0.5">
-                          <span className="text-gray-400">{r.minQty ?? '—'}</span>
+                          <span className="text-gray-400">{r.minQty ?? '-'}</span>
                           <span className="text-gray-600"> / </span>
-                          <span className="text-accent">{r.maxQty ?? '—'}</span>
+                          <span className="text-accent">{r.maxQty ?? '-'}</span>
                           {r.lotEffectif > 1 && <span className="text-gray-600"> ×{r.lotEffectif}</span>}
                         </div>
                       )}
@@ -198,19 +217,19 @@ export default function Inventaire() {
                         <div className="text-[10px] font-mono text-gray-500">{r.code}</div>
                       </td>
                       <td className={`text-right font-bold ${qtyColor(r)}`}>{r.qtyActuelle}</td>
-                      <td className="text-right text-gray-300">{r.minQty ?? '—'}</td>
-                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '—'}</td>
+                      <td className="text-right text-gray-300">{r.minQty ?? '-'}</td>
+                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '-'}</td>
                       <td className="text-right text-gray-400">
                         {r.lotEffectif > 1 ? (
                           <span title={r.lotQty == null ? `Défaut produit: ${r.lotDefault}` : 'Override resto'}>
                             {r.lotEffectif}{r.lotQty == null && r.lotDefault != null && <span className="text-gray-600 text-[10px]"> *</span>}
                           </span>
-                        ) : '—'}
+                        ) : '-'}
                       </td>
                       <td className="text-right">
                         {r.aCommander != null
                           ? <span className="text-orange-400 font-semibold">{r.aCommander}</span>
-                          : <span className="text-gray-600">—</span>}
+                          : <span className="text-gray-600">-</span>}
                       </td>
                       <td><span className={`badge ${statusLabels[r.statut].badge}`}>{statusLabels[r.statut].label}</span></td>
                       {isRestaurantAdmin && (
@@ -228,6 +247,26 @@ export default function Inventaire() {
           </>
         )}
       </section>
+
+      {/* Reset confirmation modal */}
+      {confirmReset && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card p-5 w-full max-w-sm space-y-4">
+            <h3 className="text-lg font-bold text-red-400">Remettre l'inventaire à zéro ?</h3>
+            <p className="text-sm text-gray-300">
+              Toutes les quantités seront remises à <strong className="text-white">0</strong>.
+              Les objectifs (min/max/lot) ne sont pas affectés.
+            </p>
+            <p className="text-xs text-gray-500">Cette action ne peut pas être annulée.</p>
+            <div className="flex gap-2">
+              <button className="btn btn-ghost flex-1" onClick={() => setConfirmReset(false)}>Annuler</button>
+              <button className="btn flex-1 bg-red-700 hover:bg-red-600 text-white" onClick={doReset}>
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal */}
       {editing && (
