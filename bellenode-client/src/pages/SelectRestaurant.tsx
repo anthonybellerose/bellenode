@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthApi } from '../api/client';
+import { AdminApi, AuthApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import type { Restaurant } from '../types';
 
@@ -11,9 +11,17 @@ export default function SelectRestaurant() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    AuthApi.myRestaurants()
-      .then(setRestaurants)
-      .finally(() => setLoading(false));
+    const isSuperAdmin = user?.role === 'SuperAdmin';
+    const fetch = isSuperAdmin ? AdminApi.getRestaurants() : AuthApi.myRestaurants();
+
+    fetch.then((list) => {
+      if (!isSuperAdmin && list.length === 1) {
+        selectRestaurant(list[0]);
+        navigate('/', { replace: true });
+        return;
+      }
+      setRestaurants(list);
+    }).finally(() => setLoading(false));
   }, []);
 
   const handleSelect = (r: Restaurant) => {

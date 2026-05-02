@@ -4,7 +4,12 @@ import { CommandesApi, InventoryApi } from '../api/client';
 import type { CommandeConfig, CommandeSummary, ObjectifRow } from '../types';
 import { useAuth } from '../context/AuthContext';
 
-type DraftItem = { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number };
+type DraftItem = { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number; lotEffectif: number };
+
+function formatQte(quantite: number, lot: number): string {
+  if (lot > 1 && quantite % lot === 0) return `${quantite / lot}cs`;
+  return `${quantite}x`;
+}
 
 function extractVolume(nom: string): string | null {
   const m = nom.match(/\b(\d+(?:[.,]\d+)?\s*(?:ml|mL|L|cl))\b/);
@@ -48,6 +53,7 @@ export default function Commandes() {
       nomProduit: r.nom,
       volume: extractVolume(r.nom),
       quantite: r.aCommander!,
+      lotEffectif: r.lotEffectif,
     })));
     setNote('');
     setCreating(true);
@@ -57,6 +63,10 @@ export default function Commandes() {
     const q = parseInt(val) || 0;
     setDraft(d => d.map((item, idx) => idx === i ? { ...item, quantite: q } : item));
   }
+
+  const totalDraftCs = draft.filter(i => i.quantite > 0).reduce((s, i) => {
+    return s + (i.lotEffectif > 1 && i.quantite % i.lotEffectif === 0 ? i.quantite / i.lotEffectif : 0);
+  }, 0);
 
   function removeItem(i: number) {
     setDraft(d => d.filter((_, idx) => idx !== i));
@@ -219,6 +229,7 @@ export default function Commandes() {
                       <th>Code SAQ</th>
                       <th>Volume</th>
                       <th className="text-right w-24">Qté</th>
+                      <th className="text-right w-16">SAQ</th>
                       <th className="w-8"></th>
                     </tr>
                   </thead>
@@ -233,6 +244,9 @@ export default function Commandes() {
                             value={item.quantite}
                             onChange={e => setQty(i, e.target.value)}
                             className="w-20 text-center font-bold ml-auto block" />
+                        </td>
+                        <td className="text-right font-bold text-accent text-sm">
+                          {formatQte(item.quantite, item.lotEffectif)}
                         </td>
                         <td>
                           <button className="text-red-400 hover:text-red-300 text-xs px-1"
@@ -285,6 +299,27 @@ export default function Commandes() {
                   className="w-full" />
               </div>
             ))}
+            <hr className="border-bg-border" />
+            <p className="text-xs text-gray-400 font-semibold">Envoi par courriel</p>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Destinataire (courriel de la SAQ)</label>
+              <input type="email" value={configForm.emailDestinataire ?? ''}
+                onChange={e => setConfigForm(f => ({ ...f, emailDestinataire: e.target.value || null }))}
+                placeholder="commandes@saq.com" className="w-full" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Objet du courriel</label>
+              <input type="text" value={configForm.emailSujet ?? ''}
+                onChange={e => setConfigForm(f => ({ ...f, emailSujet: e.target.value || null }))}
+                placeholder="Commande SAQ — Le Pub 111" className="w-full" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Message (optionnel)</label>
+              <textarea rows={3} value={configForm.emailMessage ?? ''}
+                onChange={e => setConfigForm(f => ({ ...f, emailMessage: e.target.value || null }))}
+                placeholder="Bonjour, veuillez trouver notre commande en pièce jointe."
+                className="w-full resize-none" />
+            </div>
             <div className="flex gap-2">
               <button className="btn btn-ghost flex-1" onClick={() => setConfigOpen(false)}>Annuler</button>
               <button className="btn btn-primary flex-1" onClick={saveConfig} disabled={savingConfig}>

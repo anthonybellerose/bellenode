@@ -14,6 +14,7 @@ builder.Services.AddDbContext<BellenodeDbContext>(options =>
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailService>();
+builder.Services.AddHttpClient("resend");
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -55,6 +56,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<BellenodeDbContext>();
+    await db.Database.MigrateAsync();
     await SeedData.InitializeAsync(db);
 }
 

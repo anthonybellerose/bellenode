@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using BellenodeApi.Data;
 using BellenodeApi.Models;
+using BellenodeApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,8 @@ namespace BellenodeApi.Controllers;
 public partial class CommandesController : BellenodeControllerBase
 {
     private readonly BellenodeDbContext _db;
-    public CommandesController(BellenodeDbContext db) => _db = db;
+    private readonly EmailService _email;
+    public CommandesController(BellenodeDbContext db, EmailService email) { _db = db; _email = email; }
 
     [GeneratedRegex(@"\b(\d+(?:[.,]\d+)?\s*(?:ml|mL|L|cl|l))\b")]
     private static partial Regex VolumeRegex();
@@ -36,16 +38,19 @@ public partial class CommandesController : BellenodeControllerBase
         {
             var resto = await _db.Restaurants.FindAsync(restaurantId.Value);
             return Ok(new { numeroClient = (string?)null, telephone = (string?)null,
-                nomEtablissement = resto?.Nom, courriel = (string?)null, responsable = (string?)null });
+                nomEtablissement = resto?.Nom, courriel = (string?)null, responsable = (string?)null,
+                emailDestinataire = (string?)null, emailSujet = (string?)null, emailMessage = (string?)null });
         }
 
         return Ok(new {
             config.NumeroClient, config.Telephone, config.NomEtablissement,
-            config.Courriel, config.Responsable
+            config.Courriel, config.Responsable,
+            config.EmailDestinataire, config.EmailSujet, config.EmailMessage
         });
     }
 
-    public record ConfigInput(string? NumeroClient, string? Telephone, string? NomEtablissement, string? Courriel, string? Responsable);
+    public record ConfigInput(string? NumeroClient, string? Telephone, string? NomEtablissement, string? Courriel, string? Responsable,
+        string? EmailDestinataire, string? EmailSujet, string? EmailMessage);
 
     // PUT /api/commandes/config
     [HttpPut("config")]
@@ -67,6 +72,9 @@ public partial class CommandesController : BellenodeControllerBase
         config.NomEtablissement = body.NomEtablissement;
         config.Courriel = body.Courriel;
         config.Responsable = body.Responsable;
+        config.EmailDestinataire = body.EmailDestinataire;
+        config.EmailSujet = body.EmailSujet;
+        config.EmailMessage = body.EmailMessage;
 
         await _db.SaveChangesAsync();
         return Ok(config);
@@ -112,10 +120,23 @@ public partial class CommandesController : BellenodeControllerBase
         var resto = await _db.Restaurants.FindAsync(restaurantId.Value);
 
         var codesSaq = commande.Items.Select(i => i.CodeSaq).Distinct().ToList();
-        var prixByCodeSaq = await _db.Products
+        var products = await _db.Products
             .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
-            .Select(p => new { p.CodeSaq, p.Prix })
-            .ToDictionaryAsync(p => p.CodeSaq!, p => p.Prix);
+            .Select(p => new { p.CodeSaq, p.CodeUpc, p.Prix, p.LotQty })
+            .ToListAsync();
+        var productsBySaq = products.ToDictionary(p => p.CodeSaq!);
+        var codesUpc = products.Select(p => p.CodeUpc).ToList();
+        var objectifByUpc = await _db.RestaurantObjectifs
+            .Where(o => o.RestaurantId == restaurantId && codesUpc.Contains(o.CodeUpc))
+            .Select(o => new { o.CodeUpc, o.LotQty })
+            .ToDictionaryAsync(o => o.CodeUpc);
+
+        int GetLotEffectif(string codeSaq)
+        {
+            if (!productsBySaq.TryGetValue(codeSaq, out var p)) return 1;
+            if (objectifByUpc.TryGetValue(p.CodeUpc, out var o) && o.LotQty is int ol && ol > 0) return ol;
+            return p.LotQty ?? 1;
+        }
 
         return Ok(new {
             commande.Id, commande.CreatedAt, commande.CreatedBy, commande.Note,
@@ -129,7 +150,8 @@ public partial class CommandesController : BellenodeControllerBase
             items = commande.Items.Select(i => new {
                 i.Id, i.CodeSaq, i.NomProduit, i.Volume, i.Quantite,
                 i.QuantiteRecue, i.IsBackorder,
-                prixUnitaire = prixByCodeSaq.TryGetValue(i.CodeSaq, out var px) ? px : null
+                prixUnitaire = productsBySaq.TryGetValue(i.CodeSaq, out var px) ? px.Prix : null,
+                lotEffectif = GetLotEffectif(i.CodeSaq)
             }).OrderBy(i => i.NomProduit).ToList()
         });
     }
@@ -336,21 +358,53 @@ public partial class CommandesController : BellenodeControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
-    // GET /api/commandes/{id}/export-saq
-    [HttpGet("{id}/export-saq")]
-    public async Task<IActionResult> ExportSaq(int id)
+    // POST /api/commandes/{id}/send-email
+    [HttpPost("{id}/send-email")]
+    public async Task<IActionResult> SendEmail(int id)
     {
         var restaurantId = await GetAuthorizedRestaurantId(_db);
         if (restaurantId is null) return Forbid();
+        if (!await IsRestaurantAdmin(_db, restaurantId.Value)) return Forbid();
 
+        var config = await _db.CommandeConfigs.FirstOrDefaultAsync(c => c.RestaurantId == restaurantId);
+        if (string.IsNullOrWhiteSpace(config?.EmailDestinataire))
+            return BadRequest(new { error = "Aucun courriel destinataire configuré. Configurez-le dans ⚙ Config." });
+
+        // Génère le Excel (réutilise la même logique que ExportSaq)
+        var excelResult = await BuildExcelBytes(id, restaurantId.Value);
+        if (excelResult is null) return NotFound();
+
+        var (excelBytes, commandeDate) = excelResult.Value;
+
+        var sujet = config.EmailSujet ?? $"Commande SAQ — {config.NomEtablissement ?? "Restaurant"} — {commandeDate}";
+        var messageHtml = string.IsNullOrWhiteSpace(config.EmailMessage)
+            ? ""
+            : $"<p style='white-space:pre-line'>{System.Net.WebUtility.HtmlEncode(config.EmailMessage)}</p><hr style='margin:20px 0;border:none;border-top:1px solid #e5e7eb'/>";
+
+        var htmlBody = $@"<div style='font-family:Arial,sans-serif;color:#1a1a24'>
+<h2 style='color:#3b82f6'>Commande SAQ — {System.Net.WebUtility.HtmlEncode(config.NomEtablissement ?? "")}  </h2>
+{messageHtml}
+<p>Veuillez trouver en pièce jointe la commande SAQ du {commandeDate}.</p>
+<p style='color:#666;font-size:12px'>Envoyé automatiquement via Bellenode</p>
+</div>";
+
+        var filename = $"commande-saq-{id}-{commandeDate}.xlsx";
+        await _email.SendAsync(config.EmailDestinataire, "", sujet, htmlBody,
+            new EmailAttachment(filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes));
+
+        return Ok(new { ok = true });
+    }
+
+    private async Task<(byte[] bytes, string dateStr)?> BuildExcelBytes(int id, int restaurantId)
+    {
         var commande = await _db.CommandesSAQ
             .Include(c => c.Items)
             .FirstOrDefaultAsync(c => c.Id == id && c.RestaurantId == restaurantId);
 
-        if (commande is null) return NotFound();
+        if (commande is null) return null;
 
         var config = await _db.CommandeConfigs.FirstOrDefaultAsync(c => c.RestaurantId == restaurantId);
-        var resto = await _db.Restaurants.FindAsync(restaurantId.Value);
+        var resto = await _db.Restaurants.FindAsync(restaurantId);
 
         var nomEtablissement = config?.NomEtablissement ?? resto?.Nom ?? "";
         var numeroClient    = config?.NumeroClient ?? "";
@@ -483,9 +537,22 @@ public partial class CommandesController : BellenodeControllerBase
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);
-        var filename = $"commande-saq-{id}-{dateStr}.xlsx";
-        return File(ms.ToArray(),
+        return (ms.ToArray(), dateStr);
+    }
+
+    // GET /api/commandes/{id}/export-saq
+    [HttpGet("{id}/export-saq")]
+    public async Task<IActionResult> ExportSaq(int id)
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var result = await BuildExcelBytes(id, restaurantId.Value);
+        if (result is null) return NotFound();
+
+        var (bytes, dateStr) = result.Value;
+        return File(bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename);
+            $"commande-saq-{id}-{dateStr}.xlsx");
     }
 }

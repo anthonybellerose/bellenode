@@ -12,4 +12,8 @@ public class CommandeConfig
     [MaxLength(200)] public string? NomEtablissement { get; set; }
     [MaxLength(200)] public string? Courriel { get; set; }
     [MaxLength(200)] public string? Responsable { get; set; }
+
+    [MaxLength(200)] public string? EmailDestinataire { get; set; }
+    [MaxLength(300)] public string? EmailSujet { get; set; }
+    public string? EmailMessage { get; set; }
 }

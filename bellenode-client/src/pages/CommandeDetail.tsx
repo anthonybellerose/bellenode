@@ -4,6 +4,11 @@ import { CommandesApi } from '../api/client';
 import type { CommandeDetail } from '../types';
 import { useAuth } from '../context/AuthContext';
 
+function formatQte(quantite: number, lot: number): string {
+  if (lot > 1 && quantite % lot === 0) return `${quantite / lot}cs`;
+  return `${quantite}x`;
+}
+
 export default function CommandeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -14,6 +19,8 @@ export default function CommandeDetailPage() {
   const [recInputs, setRecInputs] = useState<Record<number, { qty: string; bo: boolean }>>({});
   const [submittingRec, setSubmittingRec] = useState(false);
   const [recMsg, setRecMsg] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<string | null>(null);
 
   async function load() {
     if (!id) return;
@@ -89,7 +96,22 @@ export default function CommandeDetailPage() {
         )}
         {!receiveMode && <button className="btn btn-ghost" onClick={() => window.print()}>🖨 Imprimer</button>}
         {!receiveMode && (
-          <button className="btn btn-primary" onClick={() => CommandesApi.exportSaq(commande.id, `commande-saq-${commande.id}.xlsx`)}> Excel SAQ</button>
+          <>
+            <button className="btn btn-primary" onClick={() => CommandesApi.exportSaq(commande.id, `commande-saq-${commande.id}.xlsx`)}> Excel SAQ</button>
+            <button className="btn btn-ghost" disabled={sendingEmail} onClick={async () => {
+              setSendingEmail(true); setEmailResult(null);
+              try {
+                await CommandesApi.sendEmail(commande.id);
+                setEmailResult('ok');
+              } catch (e: any) {
+                setEmailResult(e?.response?.data?.error ?? 'Erreur lors de l\'envoi.');
+              } finally { setSendingEmail(false); }
+            }}>
+              {sendingEmail ? 'Envoi...' : '✉ Envoyer'}
+            </button>
+            {emailResult === 'ok' && <span className="text-green-400 text-sm">Courriel envoyé ✓</span>}
+            {emailResult && emailResult !== 'ok' && <span className="text-red-400 text-sm">{emailResult}</span>}
+          </>
         )}
       </div>
 
@@ -183,7 +205,10 @@ export default function CommandeDetailPage() {
                   <span className="text-sm font-medium text-gray-100 flex-1">
                     {item.nomProduit.replace(/\s*-\s*\d.*$/, '')}
                   </span>
-                  <span className="text-base font-bold text-gray-100 shrink-0">{item.quantite}</span>
+                  <span className="text-base font-bold text-gray-100 shrink-0">
+                    {item.quantite}
+                    <span className="ml-1 text-xs font-normal text-accent">{formatQte(item.quantite, item.lotEffectif)}</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span className="font-mono">{item.codeSaq}</span>
@@ -217,6 +242,7 @@ export default function CommandeDetailPage() {
                 <th className="text-left py-2 pr-4 font-semibold">Nom du produit</th>
                 <th className="text-left py-2 pr-4 font-semibold w-20">Volume</th>
                 <th className="text-right py-2 pr-4 font-semibold w-20">Qté</th>
+                <th className="text-right py-2 pr-4 font-semibold w-16">SAQ</th>
                 <th className="text-right py-2 pr-4 font-semibold w-20 print:hidden">Reçu</th>
                 {hasAnyPrix && (
                   <>
@@ -239,6 +265,7 @@ export default function CommandeDetailPage() {
                     </td>
                     <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
                     <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
+                    <td className="py-2 pr-4 text-right font-bold text-accent">{formatQte(item.quantite, item.lotEffectif)}</td>
                     <td className="py-2 pr-4 text-right print:hidden">
                       <span className={itemComplete ? 'text-green-700 font-semibold' : item.quantiteRecue > 0 ? 'text-yellow-700' : 'text-gray-400'}>
                         {item.isBackorder ? 'BO' : `${item.quantiteRecue}/${item.quantite}`}

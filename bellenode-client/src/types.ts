@@ -137,6 +137,9 @@ export interface CommandeConfig {
   nomEtablissement?: string | null;
   courriel?: string | null;
   responsable?: string | null;
+  emailDestinataire?: string | null;
+  emailSujet?: string | null;
+  emailMessage?: string | null;
 }
 
 export interface CommandeSummary {
@@ -160,6 +163,7 @@ export interface CommandeItemType {
   quantiteRecue: number;
   isBackorder: boolean;
   prixUnitaire?: number | null;
+  lotEffectif: number;
 }
 
 export interface PendingCommandeItem {

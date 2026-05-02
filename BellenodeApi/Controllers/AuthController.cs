@@ -162,7 +162,7 @@ public class AuthController : BellenodeControllerBase
             });
             await _db.SaveChangesAsync();
 
-            var baseUrl = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Smtp:PublicBaseUrl"] ?? "https://bellenode.com";
+            var baseUrl = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["Resend:PublicBaseUrl"] ?? "https://bellenode.com";
             var link = $"{baseUrl}/reset-password?token={token}";
 
             var body = $@"<div style='font-family:Arial,sans-serif;color:#1a1a24'>
