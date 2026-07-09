@@ -1,8 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CommandesApi } from '../api/client';
-import type { CommandeDetail } from '../types';
+import { CommandesApi, ProductsApi } from '../api/client';
+import type { CommandeDetail, Product } from '../types';
 import { useAuth } from '../context/AuthContext';
+
+type EditItem = { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number; lotEffectif: number };
+
+function extractVolume(nom: string): string | null {
+  const m = nom.match(/\b(\d+(?:[.,]\d+)?\s*(?:ml|mL|L|cl))\b/);
+  return m ? m[1] : null;
+}
 
 function formatQte(quantite: number, lot: number): string {
   if (lot > 1 && quantite % lot === 0) return `${quantite / lot}cs`;
@@ -21,6 +28,13 @@ export default function CommandeDetailPage() {
   const [recMsg, setRecMsg] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailResult, setEmailResult] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editDraft, setEditDraft] = useState<EditItem[]>([]);
+  const [editNote, setEditNote] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSearch, setEditSearch] = useState('');
+  const [editResults, setEditResults] = useState<Product[]>([]);
+  const editSearchRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     if (!id) return;
@@ -38,6 +52,65 @@ export default function CommandeDetailPage() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+
+  useEffect(() => {
+    if (editSearch.trim().length < 2) { setEditResults([]); return; }
+    const t = setTimeout(async () => {
+      const products = await ProductsApi.list(editSearch);
+      setEditResults(products.filter(p => !!p.codeSaq));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [editSearch]);
+
+  function openEdit() {
+    if (!commande) return;
+    setEditDraft(commande.items.map(it => ({
+      codeSaq: it.codeSaq,
+      nomProduit: it.nomProduit,
+      volume: it.volume,
+      quantite: it.quantite,
+      lotEffectif: it.lotEffectif,
+    })));
+    setEditNote(commande.note ?? '');
+    setEditSearch('');
+    setEditResults([]);
+    setEditMode(true);
+  }
+
+  function addToEditDraft(p: Product) {
+    const lot = p.lotQty ?? 1;
+    const existing = editDraft.findIndex(d => d.codeSaq === p.codeSaq);
+    if (existing >= 0) {
+      setEditDraft(d => d.map((item, i) => i === existing ? { ...item, quantite: item.quantite + item.lotEffectif } : item));
+    } else {
+      setEditDraft(d => [...d, {
+        codeSaq: p.codeSaq!,
+        nomProduit: p.nom,
+        volume: extractVolume(p.nom),
+        quantite: lot,
+        lotEffectif: lot,
+      }]);
+    }
+    setEditSearch('');
+    setEditResults([]);
+    editSearchRef.current?.focus();
+  }
+
+  async function saveEdit() {
+    if (!commande) return;
+    const items = editDraft.filter(i => i.quantite > 0);
+    if (items.length === 0) return;
+    setEditSaving(true);
+    try {
+      await CommandesApi.update(commande.id, { note: editNote || undefined, items });
+      setEditMode(false);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? 'Erreur lors de la modification.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   if (loading) return <div className="p-8 text-center text-gray-400">Chargement...</div>;
   if (!commande) return <div className="p-8 text-center text-gray-400">Commande introuvable.</div>;
@@ -91,6 +164,9 @@ export default function CommandeDetailPage() {
               ? <span className="badge badge-yellow ml-2">Partielle ({totalRecues}/{totalBtls})</span>
               : <span className="badge badge-gray ml-2">En attente</span>}
         </span>
+        {isRestaurantAdmin && !commande.emailEnvoyeA && !receiveMode && (
+          <button className="btn btn-ghost" onClick={openEdit}>✏ Modifier</button>
+        )}
         {isRestaurantAdmin && !receiveMode && !complete && (
           <button className="btn btn-primary" onClick={() => setReceiveMode(true)}>📦 Recevoir</button>
         )}
@@ -103,6 +179,7 @@ export default function CommandeDetailPage() {
               try {
                 await CommandesApi.sendEmail(commande.id);
                 setEmailResult('ok');
+                await load();
               } catch (e: any) {
                 setEmailResult(e?.response?.data?.error ?? 'Erreur lors de l\'envoi.');
               } finally { setSendingEmail(false); }
@@ -111,6 +188,11 @@ export default function CommandeDetailPage() {
             </button>
             {emailResult === 'ok' && <span className="text-green-400 text-sm">Courriel envoyé ✓</span>}
             {emailResult && emailResult !== 'ok' && <span className="text-red-400 text-sm">{emailResult}</span>}
+            {commande.emailEnvoyeA && !emailResult && (
+              <span className="text-xs text-gray-400">
+                ✓ Envoyé à <strong className="text-gray-300">{commande.emailEnvoyeA}</strong> le {new Date(commande.emailEnvoyeLe!).toLocaleDateString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
           </>
         )}
       </div>
@@ -316,6 +398,100 @@ export default function CommandeDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Modale édition */}
+      {editMode && (
+        <div className="fixed inset-0 bg-black/80 flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="card w-full max-w-2xl my-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold">Modifier la commande #{commande.id}</h3>
+                <p className="text-xs text-gray-400">{editDraft.filter(i=>i.quantite>0).length} produit(s) · {editDraft.reduce((s,i)=>s+i.quantite,0)} btls</p>
+              </div>
+              <button className="text-gray-400 hover:text-white text-xl" onClick={() => setEditMode(false)}>✕</button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="table-default text-sm">
+                <thead>
+                  <tr>
+                    <th>Produit</th>
+                    <th>Code SAQ</th>
+                    <th>Volume</th>
+                    <th className="text-right w-24">Qté</th>
+                    <th className="text-right w-16">SAQ</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {editDraft.map((item, i) => (
+                    <tr key={i}>
+                      <td className="text-gray-100">{item.nomProduit.replace(/\s*-\s*\d.*$/, '')}</td>
+                      <td className="font-mono text-gray-400 text-xs">{item.codeSaq}</td>
+                      <td className="text-gray-400 text-xs">{item.volume ?? '-'}</td>
+                      <td>
+                        <input type="number" inputMode="numeric" min={0}
+                          value={item.quantite}
+                          onChange={e => {
+                            const q = parseInt(e.target.value) || 0;
+                            setEditDraft(d => d.map((it, idx) => idx === i ? { ...it, quantite: q } : it));
+                          }}
+                          className="w-20 text-center font-bold ml-auto block" />
+                      </td>
+                      <td className="text-right font-bold text-accent text-sm">
+                        {formatQte(item.quantite, item.lotEffectif)}
+                      </td>
+                      <td>
+                        <button className="text-red-400 hover:text-red-300 text-xs px-1"
+                          onClick={() => setEditDraft(d => d.filter((_, idx) => idx !== i))}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="relative">
+              <label className="block text-xs text-gray-400 mb-1">Ajouter un produit manuellement</label>
+              <input
+                ref={editSearchRef}
+                type="text"
+                value={editSearch}
+                onChange={e => setEditSearch(e.target.value)}
+                onBlur={() => setTimeout(() => setEditResults([]), 150)}
+                placeholder="Rechercher par nom ou code SAQ..."
+                className="w-full"
+              />
+              {editResults.length > 0 && (
+                <ul className="absolute z-20 w-full bg-bg-elevated border border-bg-border rounded-md mt-1 max-h-52 overflow-y-auto shadow-lg">
+                  {editResults.map(p => (
+                    <li key={p.id}
+                      onMouseDown={() => addToEditDraft(p)}
+                      className="px-3 py-2 hover:bg-bg-border cursor-pointer">
+                      <div className="text-sm text-gray-100 truncate">{p.nom}</div>
+                      <div className="text-xs text-gray-500 font-mono">{p.codeSaq}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Note (optionnel)</label>
+              <input type="text" value={editNote} onChange={e => setEditNote(e.target.value)}
+                placeholder="Ex: Commande semaine du 21 avril" className="w-full" />
+            </div>
+
+            <div className="flex gap-2">
+              <button className="btn btn-ghost flex-1" onClick={() => setEditMode(false)}>Annuler</button>
+              <button className="btn btn-primary flex-1" onClick={saveEdit}
+                disabled={editSaving || editDraft.filter(i=>i.quantite>0).length === 0}>
+                {editSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

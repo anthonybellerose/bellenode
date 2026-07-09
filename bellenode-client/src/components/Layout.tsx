@@ -22,7 +22,7 @@ export default function Layout() {
     if (drawerOpen) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
-    if (touchStartX.current < 40 && dx > 60 && dy < 100) {
+    if (touchStartX.current < 100 && dx > 60 && dy < 150) {
       setDrawerOpen(true);
     }
   }
@@ -45,6 +45,7 @@ export default function Layout() {
       : []),
     ...(isSuperAdmin
       ? [
+          { to: '/mappings', label: 'Caisses', icon: '📦' },
           { to: '/admin/restaurants', label: 'Restaurants', icon: '🏪' },
           { to: '/admin/users', label: 'Utilisateurs', icon: '👥' },
         ]
@@ -61,23 +62,19 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen bg-bg" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 bg-bg-soft border-r border-bg-border flex-col fixed inset-y-0 left-0">
+
+      {/* ── Desktop sidebar ── */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-60 z-30 flex-col bg-bg-soft border-r border-bg-border">
         <div className="px-5 py-5 border-b border-bg-border">
           <h1 className="text-2xl font-bold tracking-wider text-accent">BELLENODE</h1>
           <p className="text-xs text-gray-500 mt-1">Gestion d'inventaire</p>
         </div>
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {allNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
+            <NavLink key={item.to} to={item.to} end={item.to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-3 rounded-md text-sm transition-colors ${
-                  isActive
-                    ? 'bg-accent text-white'
-                    : 'text-gray-300 hover:bg-bg-elevated hover:text-white'
+                `flex items-center gap-3 px-4 py-3 rounded-md text-sm transition-colors ${
+                  isActive ? 'bg-accent text-white' : 'text-gray-200 hover:bg-bg-elevated'
                 }`
               }
             >
@@ -86,19 +83,19 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-bg-border text-xs text-gray-500 space-y-1">
+        <div className="p-4 border-t border-bg-border text-xs text-gray-500 space-y-1">
           {restaurant && <div className="text-gray-300 font-medium truncate">{restaurant.nom}</div>}
-          <button
-            onClick={() => navigate('/profil')}
-            className="text-left text-gray-300 hover:text-white w-full truncate"
-          >
+          <button onClick={() => navigate('/profil')}
+            className="text-left text-gray-300 hover:text-white w-full truncate">
             👤 {user?.nom}
           </button>
-          <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">Déconnexion</button>
+          <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">
+            Déconnexion
+          </button>
         </div>
       </aside>
 
-      {/* Mobile header */}
+      {/* ── Mobile header ── */}
       <header className="md:hidden fixed top-0 inset-x-0 z-30 bg-bg-soft border-b border-bg-border h-14 flex items-center px-3 gap-3">
         <button
           type="button"
@@ -114,36 +111,24 @@ export default function Layout() {
           <div className="text-sm text-gray-500 truncate">Bellenode</div>
           <div className="text-base font-semibold text-white truncate leading-tight">
             {currentItem ? (
-              <>
-                <span className="mr-1">{currentItem.icon}</span>
-                {currentItem.label}
-              </>
-            ) : (
-              'Chargement...'
-            )}
+              <><span className="mr-1">{currentItem.icon}</span>{currentItem.label}</>
+            ) : 'Chargement...'}
           </div>
         </div>
       </header>
 
-      {/* Mobile drawer */}
+      {/* ── Mobile drawer ── */}
       {drawerOpen && (
         <div className="md:hidden fixed inset-0 z-40">
-          <div
-            className="absolute inset-0 bg-black/70"
-            onClick={() => setDrawerOpen(false)}
-            aria-hidden
-          />
+          <div className="absolute inset-0 bg-black/70" onClick={() => setDrawerOpen(false)} aria-hidden />
           <aside className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-bg-soft border-r border-bg-border flex flex-col">
             <div className="px-5 py-5 border-b border-bg-border flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold tracking-wider text-accent">BELLENODE</h1>
                 <p className="text-xs text-gray-500 mt-1">Gestion d'inventaire</p>
               </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                aria-label="Fermer"
-                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white"
-              >
+              <button onClick={() => setDrawerOpen(false)} aria-label="Fermer"
+                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -151,15 +136,10 @@ export default function Layout() {
             </div>
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
               {allNavItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
+                <NavLink key={item.to} to={item.to} end={item.to === '/'}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-4 py-4 rounded-md text-base transition-colors ${
-                      isActive
-                        ? 'bg-accent text-white'
-                        : 'text-gray-200 hover:bg-bg-elevated'
+                      isActive ? 'bg-accent text-white' : 'text-gray-200 hover:bg-bg-elevated'
                     }`
                   }
                 >
@@ -170,19 +150,19 @@ export default function Layout() {
             </nav>
             <div className="p-4 border-t border-bg-border text-xs text-gray-500 space-y-1">
               {restaurant && <div className="text-gray-300 font-medium truncate">{restaurant.nom}</div>}
-              <button
-                onClick={() => { navigate('/profil'); setDrawerOpen(false); }}
-                className="text-left text-gray-300 hover:text-white w-full truncate"
-              >
+              <button onClick={() => { navigate('/profil'); setDrawerOpen(false); }}
+                className="text-left text-gray-300 hover:text-white w-full truncate">
                 👤 {user?.nom}
               </button>
-              <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">Déconnexion</button>
+              <button onClick={() => { logout(); navigate('/login'); }} className="text-red-400 hover:text-red-300">
+                Déconnexion
+              </button>
             </div>
           </aside>
         </div>
       )}
 
-      {/* Main content */}
+      {/* ── Main content ── */}
       <main className="flex-1 md:ml-60 pt-14 md:pt-0 overflow-x-hidden">
         <div className="px-4 py-4 md:px-8 md:py-6 max-w-[1600px] mx-auto pb-20 md:pb-10">
           <Outlet />

@@ -4,6 +4,7 @@ using BellenodeApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BellenodeApi.Migrations
 {
     [DbContext(typeof(BellenodeDbContext))]
-    partial class BellenodeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260702234621_AddProductVolumeImageUrl")]
+    partial class AddProductVolumeImageUrl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

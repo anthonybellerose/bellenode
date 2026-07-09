@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ProductsApi, ScanApi, CommandesApi } from '../api/client';
-import type { Product, RawOp, ScanModeString, PendingCommandeItem } from '../types';
+import { ProductsApi, ScanApi, CommandesApi, MappingsApi } from '../api/client';
+import type { Product, RawOp, ScanModeString, PendingCommandeItem, CaisseMapping } from '../types';
 import BarcodeScanner from '../components/BarcodeScanner';
 
 interface ScanLine extends RawOp {
@@ -21,8 +21,10 @@ export default function Scan() {
   const [msg, setMsg] = useState<string | null>(null);
   const [showBulk, setShowBulk] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [bulkMode, setBulkMode] = useState<ScanModeString>('-');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [pendingBySaq, setPendingBySaq] = useState<Record<string, PendingCommandeItem[]>>({});
+  const [caisseMappings, setCaisseMappings] = useState<CaisseMapping[]>([]);
   const [receiving, setReceiving] = useState(false);
   const [showNameSearch, setShowNameSearch] = useState(false);
   const [nameSearch, setNameSearch] = useState('');
@@ -52,6 +54,7 @@ export default function Scan() {
   }
 
   useEffect(() => { reloadPending(); }, []);
+  useEffect(() => { MappingsApi.list().then(setCaisseMappings).catch(() => {}); }, []);
 
   useEffect(() => {
     localStorage.setItem('bellenode.user', user);
@@ -74,10 +77,13 @@ export default function Scan() {
       const first = pendingBySaq[p.codeSaq][0];
       pendingMatch = { commandeId: first.commandeId, itemId: first.id, commandeDate: first.commandeDate, restant: first.qtyManquante };
     }
-    setLines(prev => [
-      { tempId: Date.now() + Math.random(), mode, code: p.codeUpc, quantite: 1, nom: p.nom, unknown: false, pendingMatch },
-      ...prev,
-    ]);
+    setLines(prev => {
+      const existing = prev.find(l => l.code === p.codeUpc && l.mode === mode);
+      if (existing) {
+        return prev.map(l => l.tempId === existing.tempId ? { ...l, quantite: (l.quantite ?? 1) + 1 } : l);
+      }
+      return [{ tempId: Date.now() + Math.random(), mode, code: p.codeUpc, quantite: 1, nom: p.nom, unknown: false, pendingMatch }, ...prev];
+    });
     setNameSearch('');
     setNameResults([]);
     nameSearchRef.current?.focus();
@@ -108,27 +114,38 @@ export default function Scan() {
       let nom: string | null = null;
       let unknown = false;
       let pendingMatch: ScanLine['pendingMatch'] = null;
+      let lineQty = 1;
       try {
         const p = await ProductsApi.byUpc(trimmed);
         nom = p.nom;
-        // Check if the product's codeSaq matches any pending commande item (only in mode +)
         if (mode === '+' && p.codeSaq && pendingBySaq[p.codeSaq]?.length) {
           const first = pendingBySaq[p.codeSaq][0];
-          pendingMatch = {
-            commandeId: first.commandeId,
-            itemId: first.id,
-            commandeDate: first.commandeDate,
-            restant: first.qtyManquante,
-          };
+          pendingMatch = { commandeId: first.commandeId, itemId: first.id, commandeDate: first.commandeDate, restant: first.qtyManquante };
         }
       } catch {
-        unknown = true;
+        const caseMap = caisseMappings.find(m => m.codeCaisse === trimmed);
+        if (caseMap) {
+          lineQty = caseMap.quantite;
+          try {
+            const unit = await ProductsApi.byUpc(caseMap.codeUnite);
+            nom = `${unit.nom} (caisse ×${caseMap.quantite})`;
+            unknown = false;
+          } catch {
+            nom = `Caisse ×${caseMap.quantite}`;
+            unknown = false;
+          }
+        } else {
+          unknown = true;
+        }
       }
 
-      setLines((prev) => [
-        { tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: 1, nom, unknown, pendingMatch },
-        ...prev,
-      ]);
+      setLines((prev) => {
+        const existing = prev.find(l => l.code === trimmed && l.mode === mode);
+        if (existing) {
+          return prev.map(l => l.tempId === existing.tempId ? { ...l, quantite: (l.quantite ?? 1) + lineQty } : l);
+        }
+        return [{ tempId: Date.now() + Math.random(), mode, code: trimmed, quantite: lineQty, nom, unknown, pendingMatch }, ...prev];
+      });
       setCodeInput('');
     },
     [mode],
@@ -149,28 +166,63 @@ export default function Scan() {
     setLines((prev) => prev.map((l) => (l.tempId === tempId ? { ...l, quantite: qty } : l)));
   }
 
+  function updateLineMode(tempId: number, newMode: ScanModeString) {
+    setLines((prev) => prev.map((l) => (l.tempId === tempId ? { ...l, mode: newMode } : l)));
+  }
+
   async function importBulk() {
+    const rawCodes: { code: string; quantite: number }[] = [];
+    const MARKERS = new Set(['+', 'A', 'ADD', '-', 'R', 'REM', 'REMOVE', '=', 'S', 'SET']);
+    for (const rawLine of bulkText.split('\n')) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      if (MARKERS.has(line.toUpperCase())) continue;
+      const parts = line.split(/\s+/);
+      const code = parts[0];
+      const qty = parts[1] ? parseInt(parts[1]) || 1 : 1;
+      rawCodes.push({ code, quantite: qty });
+    }
+
+    if (rawCodes.length === 0) {
+      setMsg('Aucune ligne exploitable dans le texte.');
+      return;
+    }
+
+    // Merger les doublons de code avant lookup
+    const mergedMap = new Map<string, number>();
+    for (const op of rawCodes) {
+      mergedMap.set(op.code, (mergedMap.get(op.code) ?? 0) + op.quantite);
+    }
+    const uniqueCodes = Array.from(mergedMap.entries()).map(([code, quantite]) => ({ code, quantite }));
+
     try {
-      const ops = await ScanApi.parseText(bulkText);
-      if (ops.length === 0) {
-        setMsg('Aucune ligne exploitable dans le texte.');
-        return;
-      }
       const mapped = await Promise.all(
-        ops.map(async (op) => {
+        uniqueCodes.map(async (op) => {
           let nom: string | null = null;
           let unknown = false;
+          let finalQty = op.quantite;
           try {
             const p = await ProductsApi.byUpc(op.code);
             nom = p.nom;
           } catch {
-            unknown = true;
+            const caseMap = caisseMappings.find(m => m.codeCaisse === op.code);
+            if (caseMap) {
+              finalQty = op.quantite * caseMap.quantite;
+              try {
+                const unit = await ProductsApi.byUpc(caseMap.codeUnite);
+                nom = `${unit.nom} (caisse ×${caseMap.quantite})`;
+              } catch {
+                nom = `Caisse ×${caseMap.quantite}`;
+              }
+            } else {
+              unknown = true;
+            }
           }
           return {
             tempId: Date.now() + Math.random(),
-            mode: op.mode,
+            mode: bulkMode,
             code: op.code,
-            quantite: op.quantite ?? 1,
+            quantite: finalQty,
             nom,
             unknown,
           } as ScanLine;
@@ -182,7 +234,7 @@ export default function Scan() {
       setMsg(`${mapped.length} ligne(s) importée(s).`);
     } catch (e) {
       console.error(e);
-      setMsg('Erreur lors du parsing.');
+      setMsg('Erreur lors de la recherche des produits.');
     }
   }
 
@@ -222,8 +274,17 @@ export default function Scan() {
     setSubmitting(true);
     setMsg(null);
     try {
+      const grouped = new Map<string, { mode: RawOp['mode']; code: string; quantite: number }>();
+      for (const l of lines) {
+        const key = `${l.mode}|${l.code}`;
+        if (grouped.has(key)) {
+          grouped.get(key)!.quantite += l.quantite ?? 1;
+        } else {
+          grouped.set(key, { mode: l.mode, code: l.code, quantite: l.quantite ?? 1 });
+        }
+      }
       const result = await ScanApi.submitBatch(
-        lines.map((l) => ({ mode: l.mode, code: l.code, quantite: l.quantite })),
+        Array.from(grouped.values()),
         note || undefined,
         user || undefined,
       );
@@ -408,12 +469,31 @@ export default function Scan() {
 
         {showBulk && (
           <div className="space-y-2 pt-2 border-t border-bg-border">
+            <div className="flex gap-2 items-center">
+              <span className="text-xs text-gray-400 shrink-0">Mode par défaut :</span>
+              {(['+', '-', '='] as ScanModeString[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setBulkMode(m)}
+                  className={`px-3 py-1 rounded text-sm font-bold border transition-colors ${
+                    bulkMode === m
+                      ? m === '+' ? 'bg-green-600 text-white border-transparent'
+                        : m === '-' ? 'bg-red-600 text-white border-transparent'
+                        : 'bg-accent text-white border-transparent'
+                      : 'bg-bg-elevated text-gray-400 border-bg-border'
+                  }`}
+                >
+                  {m === '+' ? '+ Ajouter' : m === '-' ? '− Retirer' : '= Fixer'}
+                </button>
+              ))}
+            </div>
             <textarea
               rows={5}
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
               className="w-full font-mono text-sm"
-              placeholder={'+\n4901777035614\n080686821311\n-\n088004400361'}
+              placeholder={'4901777035614\n080686821311\n088004400361'}
             />
             <div className="flex flex-wrap gap-2 items-center">
               <button className="btn btn-secondary text-sm" onClick={importBulk}>
@@ -483,13 +563,17 @@ export default function Scan() {
             <ul className="md:hidden divide-y divide-bg-border">
               {lines.map((l) => (
                 <li key={l.tempId} className="p-3 flex items-start gap-3">
-                  <span
-                    className={`badge text-base px-2 py-1 ${
+                  <button
+                    type="button"
+                    onClick={() => updateLineMode(l.tempId, l.mode === '+' ? '-' : l.mode === '-' ? '=' : '+')}
+                    className={`badge text-base px-2 py-1 active:opacity-70 ${
                       l.mode === '+' ? 'badge-green' : l.mode === '-' ? 'badge-red' : 'badge-blue'
                     }`}
+                    style={{ minWidth: 32, minHeight: 32 }}
+                    title="Changer le mode"
                   >
                     {l.mode}
-                  </span>
+                  </button>
                   <div className="flex-1 min-w-0">
                     <div className="font-mono text-xs text-gray-500 truncate">{l.code}</div>
                     <div className="text-sm text-gray-100 truncate">
@@ -541,13 +625,16 @@ export default function Scan() {
                   {lines.map((l) => (
                     <tr key={l.tempId}>
                       <td>
-                        <span
-                          className={`badge ${
+                        <button
+                          type="button"
+                          onClick={() => updateLineMode(l.tempId, l.mode === '+' ? '-' : l.mode === '-' ? '=' : '+')}
+                          className={`badge hover:opacity-80 ${
                             l.mode === '+' ? 'badge-green' : l.mode === '-' ? 'badge-red' : 'badge-blue'
                           }`}
+                          title="Changer le mode"
                         >
                           {l.mode}
-                        </span>
+                        </button>
                       </td>
                       <td className="font-mono text-xs text-gray-400">{l.code}</td>
                       <td>

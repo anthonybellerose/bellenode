@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { InventoryApi } from '../api/client';
+import { InventoryApi, ScanApi } from '../api/client';
 import type { ObjectifRow, ObjectifStatut } from '../types';
 import UpcInputWithScanner from '../components/UpcInputWithScanner';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +11,7 @@ const statusLabels: Record<ObjectifStatut | 'ignore', { label: string; badge: st
   ignore:  { label: 'Sans objectif', badge: 'badge-gray' },
 };
 
-type EditForm = { minQty: string; maxQty: string; lotQty: string };
+type EditForm = { minQty: string; maxQty: string; lotQty: string; stockQty: string };
 
 export default function Inventaire() {
   const { isRestaurantAdmin } = useAuth();
@@ -21,7 +21,7 @@ export default function Inventaire() {
   const [search, setSearch] = useState('');
   const [inventoryOnly, setInventoryOnly] = useState(true);
   const [editing, setEditing] = useState<ObjectifRow | null>(null);
-  const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '' });
+  const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '', stockQty: '' });
   const [confirmReset, setConfirmReset] = useState(false);
 
   async function load() {
@@ -57,6 +57,7 @@ export default function Inventaire() {
       minQty: r.minQty?.toString() ?? '',
       maxQty: r.maxQty?.toString() ?? '',
       lotQty: r.lotQty?.toString() ?? '',
+      stockQty: r.qtyActuelle.toString(),
     });
   }
 
@@ -72,7 +73,15 @@ export default function Inventaire() {
     const max = form.maxQty.trim() === '' ? 0 : parseInt(form.maxQty);
     const lotRaw = form.lotQty.trim();
     const lot = lotRaw === '' ? null : parseInt(lotRaw);
+    const newStock = form.stockQty.trim() === '' ? editing.qtyActuelle : parseInt(form.stockQty);
     if (isNaN(min) || isNaN(max) || (lot !== null && isNaN(lot)) || min < 0 || max < 0 || (lot !== null && lot < 1)) return;
+    if (isNaN(newStock) || newStock < 0) return;
+    if (newStock !== editing.qtyActuelle) {
+      await ScanApi.submitBatch(
+        [{ mode: '=', code: editing.code, quantite: newStock }],
+        'Ajustement manuel inventaire'
+      );
+    }
     await InventoryApi.setObjectif(editing.code, { minQty: min, maxQty: max, lotQty: lot });
     setEditing(null);
     load();
@@ -275,8 +284,15 @@ export default function Inventaire() {
             <div>
               <h3 className="text-lg font-bold">{editing.nom}</h3>
               <p className="text-xs font-mono text-gray-500">{editing.code}</p>
-              <p className="text-sm text-gray-400 mt-1">Stock actuel : <strong className="text-white">{editing.qtyActuelle}</strong></p>
             </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Stock actuel</label>
+              <input type="number" inputMode="numeric" min={0}
+                value={form.stockQty}
+                onChange={e => setForm(f => ({ ...f, stockQty: e.target.value }))}
+                className="w-full text-center text-2xl font-bold" style={{ minHeight: 52 }} />
+            </div>
+            <hr className="border-bg-border" />
             <div className="grid grid-cols-3 gap-3">
               {([
                 { field: 'minQty', label: 'Minimum' },

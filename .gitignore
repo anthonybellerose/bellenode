@@ -47,6 +47,10 @@ appsettings.Development.json
 appsettings.Production.json
 secrets.json
 
+# DB backups & scraped data dumps (contiennent PasswordHash/tokens, trop volumineux pour git)
+scripts/db-backups/
+scripts/saq-data/
+
 # Logs
 *.log
 logs/

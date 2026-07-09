@@ -32,6 +32,8 @@ public class StatsController : BellenodeControllerBase
 
         int statOk = 0, statBas = 0, statRupture = 0, statIgnore = 0;
         decimal valeur = 0m;
+        decimal valeurAvecObjectif = 0m;
+        decimal valeurObjectif = 0m;
         foreach (var p in products)
         {
             var qty = invMap.TryGetValue(p.CodeUpc, out var q) ? q : 0;
@@ -45,6 +47,12 @@ public class StatsController : BellenodeControllerBase
             else statOk++;
 
             if (p.Prix.HasValue) valeur += p.Prix.Value * qty;
+
+            if (p.Prix.HasValue && max > 0)
+            {
+                valeurAvecObjectif += p.Prix.Value * qty;
+                valeurObjectif += p.Prix.Value * max;
+            }
         }
 
         // --- Opérations de retrait sur la période ---
@@ -92,9 +100,73 @@ public class StatsController : BellenodeControllerBase
             periode = jours,
             statut = new { ok = statOk, bas = statBas, rupture = statRupture, ignore = statIgnore },
             valeurInventaire = valeur,
+            valeurAvecObjectif,
+            valeurObjectif,
             topConsommes,
             parJour,
             totalRetraits = removeOps.Sum(o => o.Quantite)
+        });
+    }
+
+    // GET /api/stats/depenses
+    [HttpGet("depenses")]
+    public async Task<IActionResult> Depenses()
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+
+        var commandes = await _db.CommandesSAQ
+            .Include(c => c.Items)
+            .Where(c => c.RestaurantId == restaurantId)
+            .ToListAsync();
+
+        // Prix par codeSaq via la table Products
+        var codesSaq = commandes.SelectMany(c => c.Items).Select(i => i.CodeSaq).Distinct().ToList();
+        var prixBySaq = await _db.Products
+            .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
+            .Select(p => new { p.CodeSaq, p.Nom, p.Prix })
+            .ToDictionaryAsync(p => p.CodeSaq!);
+
+        decimal totalTout = 0m;
+        decimal totalEnvoye = 0m;
+        var depenseParProduit = new Dictionary<string, (string nom, decimal prix, int qte)>();
+
+        foreach (var commande in commandes)
+        {
+            decimal montantCommande = 0m;
+            foreach (var item in commande.Items)
+            {
+                if (!prixBySaq.TryGetValue(item.CodeSaq, out var prod) || prod.Prix is null) continue;
+                var montant = prod.Prix.Value * item.Quantite;
+                montantCommande += montant;
+
+                if (!depenseParProduit.TryGetValue(item.CodeSaq, out var dp))
+                    depenseParProduit[item.CodeSaq] = (prod.Nom, prod.Prix.Value, item.Quantite);
+                else
+                    depenseParProduit[item.CodeSaq] = (dp.nom, dp.prix, dp.qte + item.Quantite);
+            }
+            totalTout += montantCommande;
+            if (commande.EmailEnvoyeA is not null) totalEnvoye += montantCommande;
+        }
+
+        var topDepenses = depenseParProduit
+            .Select(kv => new {
+                codeSaq = kv.Key,
+                nom = kv.Value.nom,
+                prixUnitaire = kv.Value.prix,
+                qteTotale = kv.Value.qte,
+                totalDepense = kv.Value.prix * kv.Value.qte
+            })
+            .OrderByDescending(x => x.totalDepense)
+            .Take(15)
+            .ToList();
+
+        return Ok(new {
+            totalCommandeApprox = totalTout,
+            totalEnvoyeApprox = totalEnvoye,
+            nbCommandes = commandes.Count,
+            nbCommandesEnvoyees = commandes.Count(c => c.EmailEnvoyeA is not null),
+            topDepenses
         });
     }
 }

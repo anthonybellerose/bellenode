@@ -18,18 +18,16 @@ public class ProductsController : BellenodeControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] string? search = null)
     {
-        var query = _db.Products.AsQueryable();
+        if (string.IsNullOrWhiteSpace(search))
+            return Ok(Array.Empty<Product>());
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim().ToLower();
-            query = query.Where(p =>
-                p.Nom.ToLower().Contains(s) ||
-                p.CodeUpc.Contains(s) ||
-                (p.CodeSaq != null && p.CodeSaq.Contains(s)));
-        }
+        var s = search.Trim().ToLower();
+        var query = _db.Products.Where(p =>
+            p.Nom.ToLower().Contains(s) ||
+            p.CodeUpc.Contains(s) ||
+            (p.CodeSaq != null && p.CodeSaq.Contains(s)));
 
-        return Ok(await query.OrderBy(p => p.Nom).ToListAsync());
+        return Ok(await query.OrderBy(p => p.Nom).Take(50).ToListAsync());
     }
 
     [HttpGet("{id}")]
@@ -43,7 +41,15 @@ public class ProductsController : BellenodeControllerBase
     public async Task<IActionResult> GetByUpc(string code)
     {
         var product = await _db.Products.FirstOrDefaultAsync(p => p.CodeUpc == code);
-        return product is null ? NotFound() : Ok(product);
+        if (product is not null) return Ok(product);
+
+        // Chercher dans les codes alternatifs
+        var candidates = await _db.Products
+            .Where(p => p.AltCodes != null && p.AltCodes.Contains(code))
+            .ToListAsync();
+        var match = candidates.FirstOrDefault(p =>
+            p.AltCodes!.Split(';', StringSplitOptions.RemoveEmptyEntries).Contains(code));
+        return match is null ? NotFound() : Ok(match);
     }
 
     [HttpPost]
@@ -55,6 +61,16 @@ public class ProductsController : BellenodeControllerBase
         input.UpdatedAt = DateTime.UtcNow;
         _db.Products.Add(input);
         await _db.SaveChangesAsync();
+
+        // Marquer les items d'inventaire avec ce code comme référencés
+        var allCodes = new HashSet<string> { input.CodeUpc };
+        if (!string.IsNullOrEmpty(input.AltCodes))
+            foreach (var c in input.AltCodes.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                allCodes.Add(c);
+        var invItems = await _db.Inventory.Where(i => allCodes.Contains(i.Code)).ToListAsync();
+        foreach (var inv in invItems) { inv.IsReferenced = true; inv.UpdatedAt = DateTime.UtcNow; }
+        if (invItems.Count > 0) await _db.SaveChangesAsync();
+
         return CreatedAtAction(nameof(Get), new { id = input.Id }, input);
     }
 
@@ -71,6 +87,10 @@ public class ProductsController : BellenodeControllerBase
         existing.Prix = input.Prix;
         existing.UnitesParCaisse = input.UnitesParCaisse;
         existing.LotQty = input.LotQty;
+        existing.AltCodes = string.IsNullOrWhiteSpace(input.AltCodes) ? null : input.AltCodes;
+        existing.Volume = string.IsNullOrWhiteSpace(input.Volume) ? null : input.Volume;
+        existing.ImageUrl = string.IsNullOrWhiteSpace(input.ImageUrl) ? null : input.ImageUrl;
+        existing.Url = string.IsNullOrWhiteSpace(input.Url) ? null : input.Url;
         existing.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

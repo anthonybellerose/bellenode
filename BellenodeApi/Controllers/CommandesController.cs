@@ -96,7 +96,8 @@ public partial class CommandesController : BellenodeControllerBase
                 totalBtls = c.Items.Sum(i => i.Quantite),
                 totalRecues = c.Items.Sum(i => i.QuantiteRecue),
                 nbBackorder = c.Items.Count(i => i.IsBackorder),
-                complete = c.Items.All(i => i.IsBackorder || i.QuantiteRecue >= i.Quantite)
+                complete = c.Items.All(i => i.IsBackorder || i.QuantiteRecue >= i.Quantite),
+                c.EmailEnvoyeA, c.EmailEnvoyeLe
             })
             .ToListAsync();
 
@@ -140,6 +141,7 @@ public partial class CommandesController : BellenodeControllerBase
 
         return Ok(new {
             commande.Id, commande.CreatedAt, commande.CreatedBy, commande.Note,
+            commande.EmailEnvoyeA, commande.EmailEnvoyeLe,
             config = new {
                 numeroClient = config?.NumeroClient,
                 telephone = config?.Telephone,
@@ -343,6 +345,46 @@ public partial class CommandesController : BellenodeControllerBase
         return Ok(items);
     }
 
+    // PUT /api/commandes/{id}
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, [FromBody] CreateCommandeInput body)
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+        if (!await IsRestaurantAdmin(_db, restaurantId.Value)) return Forbid();
+
+        var commande = await _db.CommandesSAQ
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.Id == id && c.RestaurantId == restaurantId);
+        if (commande is null) return NotFound();
+
+        if (commande.EmailEnvoyeA is not null)
+            return Conflict(new { error = "Cette commande a déjà été envoyée et ne peut plus être modifiée." });
+
+        if (body.Items == null || body.Items.Count == 0)
+            return BadRequest(new { error = "Aucun item dans la commande." });
+
+        var newItems = body.Items
+            .Where(i => i.Quantite > 0 && !string.IsNullOrWhiteSpace(i.CodeSaq))
+            .Select(i => new CommandeSAQItem
+            {
+                CodeSaq = i.CodeSaq,
+                NomProduit = i.NomProduit,
+                Volume = i.Volume ?? ExtractVolume(i.NomProduit),
+                Quantite = i.Quantite
+            }).ToList();
+
+        if (newItems.Count == 0)
+            return BadRequest(new { error = "Aucun item valide." });
+
+        _db.CommandeSAQItems.RemoveRange(commande.Items);
+        commande.Items = newItems;
+        commande.Note = body.Note;
+
+        await _db.SaveChangesAsync();
+        return Ok(new { commande.Id, nbItems = commande.Items.Count, totalBtls = commande.Items.Sum(i => i.Quantite) });
+    }
+
     // DELETE /api/commandes/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
@@ -381,18 +423,41 @@ public partial class CommandesController : BellenodeControllerBase
             ? ""
             : $"<p style='white-space:pre-line'>{System.Net.WebUtility.HtmlEncode(config.EmailMessage)}</p><hr style='margin:20px 0;border:none;border-top:1px solid #e5e7eb'/>";
 
+        var contactLines = new System.Text.StringBuilder();
+        if (!string.IsNullOrWhiteSpace(config.NomEtablissement))
+            contactLines.Append($"<strong>{System.Net.WebUtility.HtmlEncode(config.NomEtablissement)}</strong><br/>");
+        if (!string.IsNullOrWhiteSpace(config.Responsable))
+            contactLines.Append($"{System.Net.WebUtility.HtmlEncode(config.Responsable)}<br/>");
+        if (!string.IsNullOrWhiteSpace(config.Telephone))
+            contactLines.Append($"Tél : {System.Net.WebUtility.HtmlEncode(config.Telephone)}<br/>");
+        if (!string.IsNullOrWhiteSpace(config.Courriel))
+            contactLines.Append($"Courriel : {System.Net.WebUtility.HtmlEncode(config.Courriel)}<br/>");
+
         var htmlBody = $@"<div style='font-family:Arial,sans-serif;color:#1a1a24'>
 <h2 style='color:#3b82f6'>Commande SAQ - {System.Net.WebUtility.HtmlEncode(config.NomEtablissement ?? "")}  </h2>
 {messageHtml}
 <p>Veuillez trouver en pièce jointe la commande SAQ du {commandeDate}.</p>
-<p style='color:#666;font-size:12px'>Envoyé automatiquement via Bellenode</p>
+<hr style='margin:20px 0;border:none;border-top:1px solid #e5e7eb'/>
+<p style='color:#888;font-size:11px'>
+  Ce courriel a été envoyé automatiquement par le système Bellenode. Aucune réponse à ce message ne sera traitée.<br/>
+  Pour toute question concernant cette commande, veuillez communiquer directement avec l'établissement :<br/><br/>
+  {contactLines}
+</p>
 </div>";
 
         var filename = $"commande-saq-{id}-{commandeDate}.xlsx";
         await _email.SendAsync(config.EmailDestinataire, "", sujet, htmlBody,
             new EmailAttachment(filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelBytes));
 
-        return Ok(new { ok = true });
+        var commande = await _db.CommandesSAQ.FirstOrDefaultAsync(c => c.Id == id && c.RestaurantId == restaurantId);
+        if (commande is not null)
+        {
+            commande.EmailEnvoyeA = config.EmailDestinataire;
+            commande.EmailEnvoyeLe = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new { ok = true, emailEnvoyeA = config.EmailDestinataire, emailEnvoyeLe = commande?.EmailEnvoyeLe });
     }
 
     private async Task<(byte[] bytes, string dateStr)?> BuildExcelBytes(int id, int restaurantId)

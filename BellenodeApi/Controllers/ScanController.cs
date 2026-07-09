@@ -39,7 +39,7 @@ public class ScanController : BellenodeControllerBase
             var mode = ParseMode(raw.Mode);
             if (mode is null) continue;
 
-            var qty = raw.Quantite is > 0 ? raw.Quantite.Value : 1;
+            var qty = raw.Mode == "=" ? (raw.Quantite ?? 0) : (raw.Quantite is > 0 ? raw.Quantite.Value : 1);
             var code = raw.Code.Trim();
 
             if (mappings.TryGetValue(code, out var map))
