@@ -46,8 +46,11 @@ cp "/tmp/config.ini.bak" "$INSTALL_DIR/config/config.ini"
 # Permissions
 chmod +x "$INSTALL_DIR/main.py" "$INSTALL_DIR/update.sh" "$INSTALL_DIR/install.sh"
 
-# Mise à jour du service systemd si changé
-sudo cp "$INSTALL_DIR/bellenode-scanner.service" /etc/systemd/system/
+# Mise à jour du service systemd si changé — substituer les gabarits __USER__/
+# __INSTALL_DIR__ comme le fait install.sh (le fichier du repo est un template brut,
+# le copier tel quel produit un service invalide : "bad unit file setting")
+sed -e "s|__USER__|$(whoami)|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
+    "$INSTALL_DIR/bellenode-scanner.service" | sudo tee /etc/systemd/system/bellenode-scanner.service > /dev/null
 sudo systemctl daemon-reload
 
 # Redémarrage
