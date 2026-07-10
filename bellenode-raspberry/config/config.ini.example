@@ -1,0 +1,41 @@
+[api]
+# URL de base de l'API Bellenode
+url = https://bellenode.com
+
+# Credentials du compte Bellenode (compte dédié raspberry recommandé)
+email = anthonybellerose2504@gmail.com
+password = CHANGEME
+
+# ID du restaurant (voir l'URL dans Bellenode après connexion)
+restaurant_id = 1
+
+[scanner]
+# Mode par défaut au démarrage : minus (-), plus (+), set (=)
+default_mode = minus
+
+# Codes-barres spéciaux pour changer de mode (à imprimer et plastifier)
+barcode_mode_plus  = CMD_MODE_PLUS
+barcode_mode_minus = CMD_MODE_MINUS
+barcode_mode_set   = CMD_MODE_SET
+barcode_new_batch  = CMD_NEW_BATCH
+barcode_send_now   = CMD_SEND_NOW
+
+[queue]
+# Secondes entre chaque tentative de retry si API inaccessible
+retry_interval_seconds = 30
+
+# Heure de réconciliation nocturne (format 24h)
+reconcile_hour = 2
+
+# Secondes entre chaque sondage du statut réseau réel (badge Connecté/Hors ligne)
+status_check_interval_seconds = 10
+
+# Secondes entre chaque rafraîchissement du badge stock bas (écran principal)
+lowstock_check_interval_seconds = 60
+
+[display]
+# Taille de la fenêtre (adapter selon l'écran)
+width  = 800
+height = 480
+
+# Note : l'app démarre toujours en plein écran (forcé dans config.py), pas configurable ici.

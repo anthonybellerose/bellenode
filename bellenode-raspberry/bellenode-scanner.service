@@ -1,0 +1,23 @@
+[Unit]
+Description=Bellenode Scanner Raspberry Pi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=/usr/bin/python3 __INSTALL_DIR__/main.py
+Restart=always
+RestartSec=10
+
+# Accès au display pour tkinter
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/__USER__/.Xauthority
+
+# Logs systemd
+StandardOutput=append:__INSTALL_DIR__/logs/bellenode.log
+StandardError=append:__INSTALL_DIR__/logs/bellenode.log
+
+[Install]
+WantedBy=graphical.target
