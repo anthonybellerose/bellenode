@@ -30,14 +30,15 @@ public class ProductsController : BellenodeControllerBase
         return Ok(await query.OrderBy(p => p.Nom).Take(50).ToListAsync());
     }
 
-    // Liste allégée (codeUpc, nom, volume) du catalogue complet, sans le filtre de
-    // recherche de GetAll — utilisée pour le cache local du scanner Raspberry Pi, qui
-    // doit pouvoir résoudre n'importe quel produit du catalogue SAQ dès le premier scan.
+    // Liste allégée (codeUpc, nom, volume, imageUrl) du catalogue complet, sans le
+    // filtre de recherche de GetAll — utilisée pour le cache local du scanner
+    // Raspberry Pi, qui doit pouvoir résoudre n'importe quel produit du catalogue
+    // SAQ dès le premier scan (y compris sa photo, mise en cache localement sur le Pi).
     [HttpGet("cache-pi")]
     public async Task<IActionResult> GetCachePi()
     {
         var products = await _db.Products
-            .Select(p => new { p.CodeUpc, p.Nom, p.Volume })
+            .Select(p => new { p.CodeUpc, p.Nom, p.Volume, p.ImageUrl })
             .ToListAsync();
         return Ok(products);
     }
