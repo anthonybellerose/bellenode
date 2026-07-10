@@ -74,8 +74,9 @@ class BellenodeClient:
                 upc = p.get("codeUpc") or p.get("code", "")
                 if upc:
                     self._products[upc] = {
-                        "nom":    p.get("nom", "Produit inconnu"),
-                        "volume": p.get("volume", ""),
+                        "nom":      p.get("nom", "Produit inconnu"),
+                        "volume":   p.get("volume", ""),
+                        "imageUrl": p.get("imageUrl"),
                     }
 
             # Stock actuel du restaurant
@@ -101,6 +102,11 @@ class BellenodeClient:
 
     def get_stock(self, barcode: str) -> int:
         return self._stock.get(barcode, 0)
+
+    def get_image_url(self, code: str) -> str | None:
+        """URL de la photo produit depuis le cache local (pas de requête réseau)."""
+        product = self._products.get(code)
+        return product.get("imageUrl") if product else None
 
     def apply_local_stock(self, barcode: str, mode: str, qty: int = 1):
         """Met à jour le stock local immédiatement (avant confirmation serveur)."""

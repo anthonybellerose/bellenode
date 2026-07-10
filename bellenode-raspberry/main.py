@@ -23,6 +23,7 @@ import time
 from datetime import datetime
 
 import config
+import image_cache
 from api_client import BellenodeClient
 from queue_db import LocalQueue
 from scanner import ScannerReader
@@ -82,6 +83,7 @@ class BellenodeScanner:
                 on_new_batch=self._flush_now,
                 on_navigate=self._on_navigate,
                 on_open_batch_detail=self._on_open_batch_detail,
+                on_request_image=self._on_request_image,
             )
             self.ui.update_mode(self.mode)
             self.ui.update_status(self.api.is_online(), self.db.pending_count())
@@ -144,6 +146,10 @@ class BellenodeScanner:
             logger.info(f"✓ [{self.mode}] {nom} {volume}  {stock_before}→{stock_after}")
             if self.ui:
                 self.ui.update_scan(nom, volume, stock_before, stock_after, self.today_scan_count)
+                cached_path = image_cache.get_cached_path(barcode)
+                self.ui.update_scan_image(barcode, cached_path)
+                if not cached_path and product.get("imageUrl"):
+                    self._on_request_image(barcode, product["imageUrl"])
         else:
             logger.warning(f"Produit non référencé : {barcode}")
             if self.ui:
@@ -235,9 +241,11 @@ class BellenodeScanner:
         ).start()
 
     def _load_inventaire(self):
-        items = self.api.get_inventory()
+        items = self.api.get_inventory() or []
+        for it in items:
+            it["imageUrl"] = self.api.get_image_url(it.get("code"))
         if self.ui:
-            self.ui.set_list_data("inventaire", items or [])
+            self.ui.set_list_data("inventaire", items)
 
     def _fetch_stockbas(self) -> list[dict] | None:
         """Produits sous leur seuil min, catalogue complet (pas seulement inventoryOnly) —
@@ -257,8 +265,23 @@ class BellenodeScanner:
     def _load_avenir(self):
         objectifs = self.api.get_objectifs() or []
         rows = [o for o in objectifs if (o.get("qtyPending") or 0) > 0]
+        for o in rows:
+            o["imageUrl"] = self.api.get_image_url(o.get("code"))
         if self.ui:
             self.ui.set_list_data("avenir", rows)
+
+    # ── Photos produits (téléchargement + cache, jamais sur le thread tkinter) ─
+
+    def _on_request_image(self, code: str, url: str):
+        threading.Thread(
+            target=self._load_image, args=(code, url),
+            daemon=True, name=f"Img-{code}",
+        ).start()
+
+    def _load_image(self, code: str, url: str):
+        path = image_cache.fetch_and_cache(code, url)
+        if self.ui:
+            self.ui.set_image_ready(code, path)
 
     def _load_historique(self):
         batches = self.api.get_batches()

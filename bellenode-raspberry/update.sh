@@ -46,6 +46,10 @@ cp "/tmp/config.ini.bak" "$INSTALL_DIR/config/config.ini"
 # Permissions
 chmod +x "$INSTALL_DIR/main.py" "$INSTALL_DIR/update.sh" "$INSTALL_DIR/install.sh"
 
+# Dépendances Python (peut en ajouter de nouvelles au fil des mises à jour, ex: Pillow)
+echo "► Vérification des dépendances Python..."
+pip3 install -q requests evdev Pillow --break-system-packages 2>/dev/null || pip3 install -q requests evdev Pillow
+
 # Mise à jour du service systemd si changé — substituer les gabarits __USER__/
 # __INSTALL_DIR__ comme le fait install.sh (le fichier du repo est un template brut,
 # le copier tel quel produit un service invalide : "bad unit file setting")

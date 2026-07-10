@@ -5,13 +5,22 @@ Conçu pour 800×480 (écran officiel 7²).
 Écrans : Scan (accueil) ⇄ Menu ⇄ Inventaire / Stock bas / Commandes à venir /
 Historique (→ détail d'un batch). Navigation par un bouton "☰ Menu" unique,
 présent sur l'écran de scan et chaque écran de consultation.
+
+Photos produits (Inventaire, Commandes à venir, écran Scan) : affichées depuis
+le cache disque local (image_cache.get_cached_path, lecture instantanée). Si
+absente du cache, un placeholder s'affiche tout de suite et le téléchargement
+est délégué à main.py en arrière-plan (on_request_image) — jamais de réseau
+sur le thread tkinter.
 """
 import queue
 import tkinter as tk
 from datetime import datetime
 from typing import Callable
 
+from PIL import Image, ImageTk
+
 import config
+import image_cache
 
 MODE_LABELS = {
     "plus":  ("+ AJOUT",   "#22c55e"),   # vert
@@ -37,10 +46,14 @@ COLORS = {
     "warning":    "#f59e0b",
 }
 
-LIST_PAGE_SIZE = 8
+IMG_THUMB_PX = 44     # vignette dans les listes
+SCAN_IMG_PX = 150     # photo sur l'écran de scan
+PLACEHOLDER_TEXT = "📦"
+PLACEHOLDER_FAILED = "🚫"
 
 
-# ── Formatage des lignes de liste : (texte, id_cliquable_ou_None, couleur) ──
+# ── Formatage des lignes de liste : chaque formatter retourne un dict avec
+# text/id/color/image_code/image_url (les deux derniers None si pas d'image) ──
 
 def _fmt_money(v) -> str:
     return f"${v:,.2f}" if v is not None else "—"
@@ -55,44 +68,51 @@ def _fmt_dt(iso: str | None) -> str:
         return str(iso)[:16]
 
 
-def _row_inventaire(item: dict):
-    nom = (item.get("nom") or item.get("code") or "?")[:32]
+def _row_inventaire(item: dict) -> dict:
+    code = item.get("code")
+    nom = (item.get("nom") or code or "?")[:30]
     qty = item.get("quantite", 0)
     prix = _fmt_money(item.get("prix"))
-    return f"{nom:<32} {qty:>5}  {prix:>8}", None, COLORS["text"]
+    return {"text": f"{nom:<30} {qty:>5}  {prix:>7}", "id": None, "color": COLORS["text"],
+            "image_code": code, "image_url": item.get("imageUrl")}
 
 
-def _row_stockbas(item: dict):
+def _row_stockbas(item: dict) -> dict:
     nom = (item.get("nom") or item.get("code") or "?")[:26]
     qty = item.get("qtyActuelle", 0)
     minq = item.get("minQty") or 0
     rupture = item.get("statut") == "rupture"
     statut = "RUPTURE" if rupture else "BAS"
     color = COLORS["error"] if rupture else COLORS["warning"]
-    return f"{nom:<26} {qty:>6}  min {minq:>4}  {statut}", None, color
+    return {"text": f"{nom:<26} {qty:>6}  min {minq:>4}  {statut}", "id": None, "color": color,
+            "image_code": None, "image_url": None}
 
 
-def _row_avenir(item: dict):
-    nom = (item.get("nom") or item.get("code") or "?")[:28]
+def _row_avenir(item: dict) -> dict:
+    code = item.get("code")
+    nom = (item.get("nom") or code or "?")[:26]
     qty = item.get("qtyActuelle", 0)
     pend = item.get("qtyPending") or 0
-    return f"{nom:<28} actuel {qty:>4}  en route {pend:>4}", None, COLORS["accent"]
+    return {"text": f"{nom:<26} actuel {qty:>4}  en route {pend:>4}", "id": None, "color": COLORS["accent"],
+            "image_code": code, "image_url": item.get("imageUrl")}
 
 
-def _row_historique(item: dict):
+def _row_historique(item: dict) -> dict:
     dt = _fmt_dt(item.get("createdAt"))
     who = (item.get("createdBy") or "—")[:12]
     mvmt = f"+{item.get('totalAjouts', 0)}/-{item.get('totalRetraits', 0)}"
     produits = item.get("produitsTouches", 0)
-    return f"{dt:<16} {who:<12} {mvmt:>8}  {produits} prod.", item.get("id"), COLORS["text"]
+    return {"text": f"{dt:<16} {who:<12} {mvmt:>8}  {produits} prod.", "id": item.get("id"),
+            "color": COLORS["text"], "image_code": None, "image_url": None}
 
 
-def _row_operation(op: dict):
+def _row_operation(op: dict) -> dict:
     symbol, color = BATCH_MODE_SYMBOLS.get(op.get("mode"), ("?", COLORS["muted"]))
     nom = (op.get("nom") or op.get("code") or "?")[:26]
     avant = op.get("qtyAvant", 0)
     apres = op.get("qtyApres", 0)
-    return f"{symbol} {nom:<26} {avant:>4} → {apres:<4}", None, color
+    return {"text": f"{symbol} {nom:<26} {avant:>4} → {apres:<4}", "id": None, "color": color,
+            "image_code": None, "image_url": None}
 
 
 FORMATTERS = {
@@ -104,22 +124,26 @@ FORMATTERS = {
 }
 
 LIST_SCREENS = [
-    # key, titre, en-tête colonnes, clickable, back_target, show_refresh
-    ("inventaire", "Inventaire",
-     f"{'Produit':<32} {'Qté':>5}  {'Prix':>8}",
-     False, "menu", True),
-    ("stockbas", "Stock bas",
-     f"{'Produit':<26} {'Actuel':>6}  {'Min':>4}   Statut",
-     False, "menu", True),
-    ("avenir", "Commandes à venir",
-     f"{'Produit':<28} {'Actuel':>10}  {'En route':>9}",
-     False, "menu", True),
-    ("historique", "Historique",
-     f"{'Date/heure':<16} {'Par':<12} {'Mvmt':>8}  Produits",
-     True, "menu", True),
-    ("historique_detail", "Détail du batch",
-     f"  {'Produit':<26} {'Avant':>4}   Après",
-     False, "historique", False),
+    dict(key="inventaire", title="Inventaire",
+         header_text=f"{'Produit':<30} {'Qté':>5}  {'Prix':>7}",
+         clickable=False, back_target="menu", show_refresh=True,
+         with_image=True, page_size=5),
+    dict(key="stockbas", title="Stock bas",
+         header_text=f"{'Produit':<26} {'Actuel':>6}  {'Min':>4}   Statut",
+         clickable=False, back_target="menu", show_refresh=True,
+         with_image=False, page_size=8),
+    dict(key="avenir", title="Commandes à venir",
+         header_text=f"{'Produit':<26} actuel {'':>4}  en route",
+         clickable=False, back_target="menu", show_refresh=True,
+         with_image=True, page_size=5),
+    dict(key="historique", title="Historique",
+         header_text=f"{'Date/heure':<16} {'Par':<12} {'Mvmt':>8}  Produits",
+         clickable=True, back_target="menu", show_refresh=True,
+         with_image=False, page_size=8),
+    dict(key="historique_detail", title="Détail du batch",
+         header_text=f"  {'Produit':<26} {'Avant':>4}   Après",
+         clickable=False, back_target="historique", show_refresh=False,
+         with_image=False, page_size=8),
 ]
 
 
@@ -127,15 +151,18 @@ class RaspberryUI:
     def __init__(self, on_mode_change: Callable[[str], None],
                  on_new_batch: Callable[[], None],
                  on_navigate: Callable[[str], None],
-                 on_open_batch_detail: Callable[[int], None]):
+                 on_open_batch_detail: Callable[[int], None],
+                 on_request_image: Callable[[str, str], None]):
         self._on_mode_change = on_mode_change
         self._on_new_batch = on_new_batch
         self._on_navigate = on_navigate
         self._on_open_batch_detail = on_open_batch_detail
+        self._on_request_image = on_request_image
         self._update_queue: queue.Queue = queue.Queue()
 
         self._lists: dict[str, dict] = {}
         self._screens: dict[str, tk.Frame] = {}
+        self._scan_image_code: str | None = None
 
         self.root = tk.Tk()
         self.root.title("Bellenode Scanner")
@@ -149,9 +176,8 @@ class RaspberryUI:
 
         self._build_scan_screen()
         self._build_menu_screen()
-        for key, title, header, clickable, back_target, show_refresh in LIST_SCREENS:
-            self._build_list_screen(key, title, header, clickable=clickable,
-                                     back_target=back_target, show_refresh=show_refresh)
+        for spec in LIST_SCREENS:
+            self._build_list_screen(**spec)
 
         self._current = "scan"
         self._show("scan")
@@ -214,12 +240,21 @@ class RaspberryUI:
         product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat")
         product_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
+        img_container = tk.Frame(product_frame, bg=COLORS["card"], width=SCAN_IMG_PX, height=SCAN_IMG_PX)
+        img_container.pack(pady=(16, 4))
+        img_container.pack_propagate(False)
+        self._scan_image_label = tk.Label(
+            img_container, bg=COLORS["card"], fg=COLORS["muted"],
+            text=PLACEHOLDER_TEXT, font=("Helvetica", 40),
+        )
+        self._scan_image_label.pack(fill="both", expand=True)
+
         self._product_name = tk.Label(
             product_frame, text="En attente de scan...",
             bg=COLORS["card"], fg=COLORS["text"],
             font=("Helvetica", 28, "bold"), wraplength=W - 80,
         )
-        self._product_name.pack(pady=(24, 4))
+        self._product_name.pack(pady=(4, 4))
 
         self._product_detail = tk.Label(
             product_frame, text="",
@@ -305,8 +340,32 @@ class RaspberryUI:
 
     # ── Écrans de consultation (liste paginée générique) ─────────────────────
 
+    def _build_row(self, parent: tk.Widget, with_image: bool) -> dict:
+        row_frame = tk.Frame(parent, bg=COLORS["card"])
+        row_frame.pack(fill="x", padx=8, pady=2 if with_image else 1)
+
+        img_label = None
+        if with_image:
+            img_container = tk.Frame(row_frame, bg=COLORS["card"], width=IMG_THUMB_PX, height=IMG_THUMB_PX)
+            img_container.pack(side="left", padx=(4, 8), pady=3)
+            img_container.pack_propagate(False)
+            img_label = tk.Label(
+                img_container, bg=COLORS["card"], fg=COLORS["muted"],
+                text=PLACEHOLDER_TEXT, font=("Helvetica", 16),
+            )
+            img_label.pack(fill="both", expand=True)
+
+        text_label = tk.Label(
+            row_frame, text="", bg=COLORS["card"], fg=COLORS["text"],
+            font=("Courier", 13), anchor="w", justify="left",
+        )
+        text_label.pack(side="left", fill="both", expand=True, pady=1)
+
+        return {"frame": row_frame, "img_label": img_label, "text_label": text_label, "code": None}
+
     def _build_list_screen(self, key: str, title: str, header_text: str, *,
-                            clickable: bool, back_target: str, show_refresh: bool):
+                            clickable: bool, back_target: str, show_refresh: bool,
+                            with_image: bool, page_size: int):
         frame = tk.Frame(self._container, bg=COLORS["bg"])
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens[key] = frame
@@ -340,22 +399,19 @@ class RaspberryUI:
                 command=lambda k=key: self._refresh(k),
             ).pack(side="right", padx=8, pady=8)
 
+        header_row = tk.Frame(frame, bg=COLORS["bg"])
+        header_row.pack(fill="x", padx=16, pady=(8, 2))
+        if with_image:
+            tk.Frame(header_row, bg=COLORS["bg"], width=IMG_THUMB_PX + 12).pack(side="left")
         tk.Label(
-            frame, text=header_text, bg=COLORS["bg"], fg=COLORS["muted"],
+            header_row, text=header_text, bg=COLORS["bg"], fg=COLORS["muted"],
             font=("Courier", 12, "bold"), anchor="w", justify="left",
-        ).pack(fill="x", padx=16, pady=(8, 2))
+        ).pack(side="left", fill="x", expand=True)
 
         body = tk.Frame(frame, bg=COLORS["bg"])
         body.pack(fill="both", expand=True, padx=8)
 
-        row_labels = []
-        for _ in range(LIST_PAGE_SIZE):
-            lbl = tk.Label(
-                body, text="", bg=COLORS["card"], fg=COLORS["text"],
-                font=("Courier", 13), anchor="w", justify="left",
-            )
-            lbl.pack(fill="x", padx=8, pady=1)
-            row_labels.append(lbl)
+        rows = [self._build_row(body, with_image) for _ in range(page_size)]
 
         footer = tk.Frame(frame, bg=COLORS["bg"], height=50)
         footer.pack(fill="x", padx=8, pady=(0, 8))
@@ -379,9 +435,9 @@ class RaspberryUI:
         ).pack(side="left", padx=4, expand=True, fill="x")
 
         self._lists[key] = {
-            "data": [], "page": 0, "row_labels": row_labels,
+            "data": [], "page": 0, "page_size": page_size, "rows": rows,
             "page_label": page_label, "updated_label": updated_label,
-            "title_label": title_label, "clickable": clickable,
+            "title_label": title_label, "clickable": clickable, "with_image": with_image,
         }
 
     # ── Navigation (toujours appelée depuis le thread principal tkinter) ─────
@@ -407,9 +463,12 @@ class RaspberryUI:
 
     def _set_loading(self, key: str):
         st = self._lists[key]
-        st["row_labels"][0].config(text="Chargement...", fg=COLORS["muted"])
-        for lbl in st["row_labels"][1:]:
-            lbl.config(text="", fg=COLORS["muted"])
+        for i, row in enumerate(st["rows"]):
+            row["text_label"].config(text="Chargement..." if i == 0 else "", fg=COLORS["muted"])
+            row["code"] = None
+            if row["img_label"] is not None:
+                row["img_label"].config(image="", text="")
+                row["img_label"].image = None
         st["page_label"].config(text="Page —")
 
     def _open_batch_detail(self, batch_id: int):
@@ -420,42 +479,111 @@ class RaspberryUI:
 
     def _change_page(self, key: str, delta: int):
         st = self._lists[key]
-        total_pages = max(1, -(-len(st["data"]) // LIST_PAGE_SIZE))
+        total_pages = max(1, -(-len(st["data"]) // st["page_size"]))
         st["page"] = min(max(0, st["page"] + delta), total_pages - 1)
         self._render_list(key)
 
     def _render_list(self, key: str):
         st = self._lists[key]
         data = st["data"]
-        total_pages = max(1, -(-len(data) // LIST_PAGE_SIZE))
+        page_size = st["page_size"]
+        total_pages = max(1, -(-len(data) // page_size))
         page = min(st["page"], total_pages - 1)
         st["page"] = page
-        start = page * LIST_PAGE_SIZE
-        chunk = data[start:start + LIST_PAGE_SIZE]
+        start = page * page_size
+        chunk = data[start:start + page_size]
 
         formatter = FORMATTERS[key]
-        for i, lbl in enumerate(st["row_labels"]):
+        for i, row in enumerate(st["rows"]):
+            text_label = row["text_label"]
             if i < len(chunk):
-                text, item_id, color = formatter(chunk[i])
-                lbl.config(text=text, fg=color)
+                f = formatter(chunk[i])
+                text_label.config(text=f["text"], fg=f["color"])
+                item_id = f["id"]
                 if st["clickable"] and item_id is not None:
-                    lbl.config(cursor="hand2")
-                    lbl.bind("<Button-1>", lambda e, bid=item_id: self._open_batch_detail(bid))
+                    text_label.config(cursor="hand2")
+                    text_label.bind("<Button-1>", lambda e, bid=item_id: self._open_batch_detail(bid))
                 else:
-                    lbl.unbind("<Button-1>")
-                    lbl.config(cursor="arrow")
+                    text_label.unbind("<Button-1>")
+                    text_label.config(cursor="arrow")
+                if row["img_label"] is not None:
+                    self._set_row_image(row, f["image_code"], f["image_url"])
             else:
-                lbl.config(text="Aucune donnée." if (i == 0 and not data) else "", fg=COLORS["muted"])
-                lbl.unbind("<Button-1>")
-                lbl.config(cursor="arrow")
+                text_label.config(text="Aucune donnée." if (i == 0 and not data) else "", fg=COLORS["muted"])
+                text_label.unbind("<Button-1>")
+                text_label.config(cursor="arrow")
+                if row["img_label"] is not None:
+                    self._set_row_image(row, None, None)
 
         st["page_label"].config(text=f"Page {page + 1}/{total_pages}  ({len(data)} au total)")
+
+    # ── Photos produits ────────────────────────────────────────────────────────
+
+    def _load_photo(self, path: str, size: tuple[int, int]) -> ImageTk.PhotoImage | None:
+        try:
+            img = Image.open(path).convert("RGB")
+            img.thumbnail(size)
+            return ImageTk.PhotoImage(img)
+        except Exception:
+            return None
+
+    def _set_row_image(self, row: dict, code: str | None, url: str | None):
+        """Affiche l'image en cache si dispo, sinon un placeholder + demande de
+        téléchargement en arrière-plan (jamais de réseau ici, thread tkinter)."""
+        row["code"] = code
+        lbl = row["img_label"]
+        if not code:
+            lbl.config(image="", text="")
+            lbl.image = None
+            return
+        cached = image_cache.get_cached_path(code)
+        if cached:
+            photo = self._load_photo(cached, (IMG_THUMB_PX - 4, IMG_THUMB_PX - 4))
+            if photo:
+                lbl.config(image=photo, text="")
+                lbl.image = photo
+                return
+        lbl.config(image="", text=PLACEHOLDER_TEXT)
+        lbl.image = None
+        if url:
+            self._on_request_image(code, url)
+
+    def _apply_image_ready(self, code: str, path: str | None):
+        """Un téléchargement d'image demandé plus tôt vient de se terminer (succès ou
+        échec) — applique le résultat à tout ce qui affiche encore ce produit."""
+        for st in self._lists.values():
+            if not st["with_image"]:
+                continue
+            for row in st["rows"]:
+                if row["code"] != code:
+                    continue
+                photo = self._load_photo(path, (IMG_THUMB_PX - 4, IMG_THUMB_PX - 4)) if path else None
+                if photo:
+                    row["img_label"].config(image=photo, text="")
+                    row["img_label"].image = photo
+                else:
+                    row["img_label"].config(image="", text=PLACEHOLDER_FAILED)
+                    row["img_label"].image = None
+
+        if self._scan_image_code == code:
+            photo = self._load_photo(path, (SCAN_IMG_PX - 8, SCAN_IMG_PX - 8)) if path else None
+            if photo:
+                self._scan_image_label.config(image=photo, text="")
+                self._scan_image_label.image = photo
+            else:
+                self._scan_image_label.config(image="", text=PLACEHOLDER_FAILED)
+                self._scan_image_label.image = None
 
     # ── API publique (thread-safe via queue) ──────────────────────────────────
 
     def update_scan(self, product_name: str, detail: str,
                     stock_before: int, stock_after: int, scan_count: int):
         self._update_queue.put(("scan", product_name, detail, stock_before, stock_after, scan_count))
+
+    def update_scan_image(self, code: str, cached_path: str | None):
+        """Photo du produit qui vient d'être scanné — cached_path est déjà résolu par
+        main.py (lecture disque, image_cache.get_cached_path), ceci ne fait que l'afficher."""
+        self._update_queue.put(("scanimage", code, cached_path))
 
     def update_mode(self, mode: str):
         self._update_queue.put(("mode", mode))
@@ -479,6 +607,11 @@ class RaspberryUI:
         """Alimente un écran de consultation (inventaire/stockbas/avenir/historique/
         historique_detail) depuis un thread de fond, une fois les données récupérées."""
         self._update_queue.put(("listdata", key, items))
+
+    def set_image_ready(self, code: str, path: str | None):
+        """Appelé depuis main.py une fois qu'un téléchargement d'image (demandé via
+        on_request_image) se termine — path est None si le téléchargement a échoué."""
+        self._update_queue.put(("imageready", code, path))
 
     # ── Traitement des updates (thread principal tkinter) ─────────────────────
 
@@ -506,6 +639,17 @@ class RaspberryUI:
             )
             self._scan_count.config(text=f"{count} scan(s) aujourd'hui")
             self._msg_bar.config(text="", fg=COLORS["warning"])
+
+        elif kind == "scanimage":
+            _, code, cached_path = item
+            self._scan_image_code = code
+            photo = self._load_photo(cached_path, (SCAN_IMG_PX - 8, SCAN_IMG_PX - 8)) if cached_path else None
+            if photo:
+                self._scan_image_label.config(image=photo, text="")
+                self._scan_image_label.image = photo
+            else:
+                self._scan_image_label.config(image="", text=PLACEHOLDER_TEXT)
+                self._scan_image_label.image = None
 
         elif kind == "mode":
             mode = item[1]
@@ -551,6 +695,9 @@ class RaspberryUI:
             self._msg_bar.config(
                 text="Code inconnu — à ajouter dans Bellenode", fg=COLORS["warning"]
             )
+            self._scan_image_code = None
+            self._scan_image_label.config(image="", text=PLACEHOLDER_TEXT)
+            self._scan_image_label.image = None
 
         elif kind == "listdata":
             _, key, items = item
@@ -559,6 +706,10 @@ class RaspberryUI:
             st["page"] = 0
             st["updated_label"].config(text=f"Maj {datetime.now().strftime('%H:%M:%S')}")
             self._render_list(key)
+
+        elif kind == "imageready":
+            _, code, path = item
+            self._apply_image_ready(code, path)
 
     def run(self):
         self.root.mainloop()

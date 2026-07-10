@@ -20,7 +20,7 @@ apt-get update -qq
 apt-get install -y python3 python3-pip python3-tk python3-evdev openssh-server
 
 # Dépendances Python
-pip3 install requests evdev --break-system-packages 2>/dev/null || pip3 install requests evdev
+pip3 install requests evdev Pillow --break-system-packages 2>/dev/null || pip3 install requests evdev Pillow
 
 # ── Dossiers ──────────────────────────────────────────────────────────────────
 echo "► Création des dossiers..."
