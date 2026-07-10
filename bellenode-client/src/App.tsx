@@ -1,6 +1,7 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import JoinInvite from './pages/JoinInvite';
@@ -28,7 +29,11 @@ import AdminEmployees from './pages/Admin/AdminEmployees';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token } = useAuth();
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!token) {
+    if (location.pathname === '/') return <Landing />;
+    return <Navigate to="/login" replace />;
+  }
   return <>{children}</>;
 }
 

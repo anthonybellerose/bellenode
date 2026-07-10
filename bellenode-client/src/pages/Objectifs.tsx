@@ -74,7 +74,7 @@ export default function Objectifs() {
       <header className="hidden md:block">
         <h2 className="page-title">Objectifs de stock</h2>
         <p className="page-subtitle">
-          Min / Max / Lot par produit — {counts.all} référencés, {counts.alerte} en alerte
+          Min / Max / Lot par produit : {counts.all} référencés, {counts.alerte} en alerte
         </p>
       </header>
 
@@ -127,8 +127,8 @@ export default function Objectifs() {
                       </div>
                       {(r.minQty || r.maxQty) && (
                         <div className="text-[10px] text-gray-500">
-                          min <span className="text-gray-300">{r.minQty ?? '—'}</span>
-                          {' / '}max <span className="text-gray-300">{r.maxQty ?? '—'}</span>
+                          min <span className="text-gray-300">{r.minQty ?? '-'}</span>
+                          {' / '}max <span className="text-gray-300">{r.maxQty ?? '-'}</span>
                           {r.lotQty && r.lotQty > 1 && <span> · lot {r.lotQty}</span>}
                         </div>
                       )}
@@ -161,13 +161,13 @@ export default function Objectifs() {
                         <div className="text-[10px] font-mono text-gray-500">{r.code}</div>
                       </td>
                       <td className={`text-right font-bold ${qtyColor(r)}`}>{r.qtyActuelle}</td>
-                      <td className="text-right text-gray-300">{r.minQty ?? '—'}</td>
-                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '—'}</td>
-                      <td className="text-right text-gray-400">{r.lotQty ?? '—'}</td>
+                      <td className="text-right text-gray-300">{r.minQty ?? '-'}</td>
+                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '-'}</td>
+                      <td className="text-right text-gray-400">{r.lotQty ?? '-'}</td>
                       <td className="text-right">
                         {r.aCommander
                           ? <span className="text-orange-400 font-semibold">{r.aCommander}</span>
-                          : <span className="text-gray-600">—</span>}
+                          : <span className="text-gray-600">-</span>}
                       </td>
                       <td><span className={`badge ${statusLabels[r.statut].badge}`}>{statusLabels[r.statut].label}</span></td>
                       {isRestaurantAdmin && (

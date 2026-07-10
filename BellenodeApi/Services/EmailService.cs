@@ -1,71 +1,93 @@
-using System.Net;
-using System.Net.Mail;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace BellenodeApi.Services;
+
+public record EmailAttachment(string Filename, string ContentType, byte[] Content);
 
 public class EmailService
 {
     private readonly IConfiguration _config;
     private readonly ILogger<EmailService> _log;
-    private static readonly string FallbackLogPath = "/home/serveur02/bellenode_reset_links.log";
+    private readonly IHttpClientFactory _httpFactory;
 
-    public EmailService(IConfiguration config, ILogger<EmailService> log)
+    public EmailService(IConfiguration config, ILogger<EmailService> log, IHttpClientFactory httpFactory)
     {
         _config = config;
         _log = log;
+        _httpFactory = httpFactory;
     }
 
-    public async Task SendAsync(string toEmail, string toName, string subject, string body)
-    {
-        var host     = _config["Smtp:Host"];
-        var portStr  = _config["Smtp:Port"];
-        var user     = _config["Smtp:User"];
-        var password = _config["Smtp:Password"];
-        var fromEmail = _config["Smtp:FromEmail"] ?? user;
-        var fromName  = _config["Smtp:FromName"] ?? "Bellenode";
+    public Task SendAsync(string toEmail, string toName, string subject, string htmlBody)
+        => SendAsync(toEmail, toName, subject, htmlBody, null);
 
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(password))
+    public async Task SendAsync(string toEmail, string toName, string subject, string htmlBody, EmailAttachment? attachment)
+    {
+        var apiKey    = _config["Resend:ApiKey"];
+        var fromEmail = _config["Resend:FromEmail"] ?? "noreply@bellenode.com";
+        var fromName  = _config["Resend:FromName"]  ?? "Bellenode";
+
+        if (string.IsNullOrWhiteSpace(apiKey))
         {
-            // SMTP pas configuré — on log le message dans un fichier pour récup manuelle
-            _log.LogWarning("SMTP non configuré — email pour {to} écrit dans {path}", toEmail, FallbackLogPath);
-            await WriteFallbackAsync(toEmail, subject, body);
+            _log.LogWarning("Resend API key non configurée, email pour {to} non envoyé", toEmail);
             return;
         }
 
-        var port = int.TryParse(portStr, out var p) ? p : 587;
+        object payload;
+        if (attachment is not null)
+        {
+            payload = new
+            {
+                from        = $"{fromName} <{fromEmail}>",
+                to          = new[] { toEmail },
+                subject,
+                html        = htmlBody,
+                attachments = new[]
+                {
+                    new
+                    {
+                        filename = attachment.Filename,
+                        content  = Convert.ToBase64String(attachment.Content),
+                    }
+                }
+            };
+        }
+        else
+        {
+            payload = new
+            {
+                from    = $"{fromName} <{fromEmail}>",
+                to      = new[] { toEmail },
+                subject,
+                html    = htmlBody,
+            };
+        }
+
+        var json = JsonSerializer.Serialize(payload);
 
         try
         {
-            using var msg = new MailMessage();
-            msg.From = new MailAddress(fromEmail!, fromName);
-            msg.To.Add(new MailAddress(toEmail, toName));
-            msg.Subject = subject;
-            msg.Body = body;
-            msg.IsBodyHtml = true;
+            var client = _httpFactory.CreateClient("resend");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            using var client = new SmtpClient(host, port)
+            var response = await client.PostAsync(
+                "https://api.resend.com/emails",
+                new StringContent(json, Encoding.UTF8, "application/json")
+            );
+
+            if (response.IsSuccessStatusCode)
+                _log.LogInformation("Email Resend envoyé à {to}", toEmail);
+            else
             {
-                EnableSsl = true,
-                Credentials = new NetworkCredential(user, password)
-            };
-
-            await client.SendMailAsync(msg);
-            _log.LogInformation("Email envoyé à {to}", toEmail);
+                var body = await response.Content.ReadAsStringAsync();
+                _log.LogError("Resend erreur {status}: {body}", response.StatusCode, body);
+            }
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Erreur envoi email à {to} — fallback fichier", toEmail);
-            await WriteFallbackAsync(toEmail, subject, body);
+            _log.LogError(ex, "Erreur envoi Resend à {to}", toEmail);
         }
-    }
-
-    private static async Task WriteFallbackAsync(string to, string subject, string body)
-    {
-        try
-        {
-            var line = $"\n===== {DateTime.Now:yyyy-MM-dd HH:mm:ss} =====\nTO: {to}\nSUBJECT: {subject}\n\n{body}\n";
-            await File.AppendAllTextAsync(FallbackLogPath, line);
-        }
-        catch { /* ignore — sous SmarterASP on peut pas écrire dehors */ }
     }
 }

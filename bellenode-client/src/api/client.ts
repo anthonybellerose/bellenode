@@ -75,6 +75,8 @@ export const InventoryApi = {
     api.get<ObjectifRow[]>('/inventory/objectifs', { params }).then((r) => r.data),
   setObjectif: (codeUpc: string, data: { minQty: number; maxQty: number; lotQty?: number | null }) =>
     api.patch(`/inventory/objectifs/${codeUpc}`, data).then((r) => r.data),
+  reset: () => api.post('/inventory/reset').then((r) => r.data as { reset: number }),
+  removeItem: (id: number) => api.delete(`/inventory/${id}`).then((r) => r.data),
   exportExcel: async (filename: string = 'inventaire.xlsx') => {
     const r = await api.get('/inventory/export', {
       responseType: 'blob',
@@ -156,6 +158,8 @@ export const CommandesApi = {
   get: (id: number) => api.get<import('../types').CommandeDetail>(`/commandes/${id}`).then(r => r.data),
   create: (data: { note?: string; items: { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number }[] }) =>
     api.post<{ id: number; nbItems: number; totalBtls: number }>('/commandes', data).then(r => r.data),
+  update: (id: number, data: { note?: string; items: { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number }[] }) =>
+    api.put<{ id: number; nbItems: number; totalBtls: number }>(`/commandes/${id}`, data).then(r => r.data),
   remove: (id: number) => api.delete(`/commandes/${id}`).then(r => r.data),
   exportSaq: async (id: number, filename: string) => {
     const r = await api.get(`/commandes/${id}/export-saq`, { responseType: 'blob' });
@@ -172,18 +176,37 @@ export const CommandesApi = {
     api.post<{ ok: boolean }>(`/commandes/items/${itemId}/backorder`, { isBackorder }).then(r => r.data),
   pendingItems: () =>
     api.get<import('../types').PendingCommandeItem[]>('/commandes/pending-items').then(r => r.data),
+  sendEmail: (id: number) => api.post<{ ok: boolean }>(`/commandes/${id}/send-email`).then(r => r.data),
 };
 
 export interface StatsData {
   periode: number;
   statut: { ok: number; bas: number; rupture: number; ignore: number };
   valeurInventaire: number;
+  valeurAvecObjectif: number;
+  valeurObjectif: number;
   topConsommes: { code: string; nom: string; total: number }[];
   parJour: { date: string; total: number }[];
   totalRetraits: number;
 }
 
+export interface DepensesData {
+  totalCommandeApprox: number;
+  totalEnvoyeApprox: number;
+  nbCommandes: number;
+  nbCommandesEnvoyees: number;
+  topDepenses: {
+    codeSaq: string;
+    nom: string;
+    prixUnitaire: number;
+    qteTotale: number;
+    totalDepense: number;
+  }[];
+}
+
 export const StatsApi = {
   get: (jours: number = 30) =>
     api.get<StatsData>('/stats', { params: { jours } }).then((r) => r.data),
+  getDepenses: () =>
+    api.get<DepensesData>('/stats/depenses').then((r) => r.data),
 };

@@ -17,7 +17,7 @@ export default function Batches() {
     <div className="space-y-4 md:space-y-6">
       <header className="hidden md:block">
         <h2 className="page-title">Historique des batches</h2>
-        <p className="page-subtitle">Tous les scans enregistrés — {batches.length} batch(es)</p>
+        <p className="page-subtitle">Tous les scans enregistrés : {batches.length} batch(es)</p>
       </header>
 
       <section className="card overflow-hidden">
@@ -76,8 +76,8 @@ export default function Batches() {
                     <tr key={b.id}>
                       <td className="font-mono text-gray-400">#{b.id}</td>
                       <td className="text-gray-300">{new Date(b.createdAt).toLocaleString('fr-CA')}</td>
-                      <td className="text-gray-400">{b.createdBy ?? '—'}</td>
-                      <td className="text-gray-400">{b.note ?? '—'}</td>
+                      <td className="text-gray-400">{b.createdBy ?? '-'}</td>
+                      <td className="text-gray-400">{b.note ?? '-'}</td>
                       <td className="text-right">{b.lignesOps}</td>
                       <td className="text-right">{b.produitsTouches}</td>
                       <td className="text-right">

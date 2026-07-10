@@ -114,7 +114,34 @@ public class InventoryController : BellenodeControllerBase
             .Where(i => i.RestaurantId == restaurantId && !i.IsReferenced)
             .OrderBy(i => i.Code)
             .ToListAsync();
-        return Ok(items);
+
+        if (items.Count == 0) return Ok(items);
+
+        // Cross-check réel contre la table Products (le flag IsReferenced peut être désyncronisé)
+        var codes = items.Select(i => i.Code).ToHashSet();
+        var matchedUpc = await _db.Products
+            .Where(p => codes.Contains(p.CodeUpc))
+            .Select(p => p.CodeUpc)
+            .ToListAsync();
+        var matched = new HashSet<string>(matchedUpc);
+
+        var altProducts = await _db.Products
+            .Where(p => p.AltCodes != null)
+            .Select(p => p.AltCodes!)
+            .ToListAsync();
+        foreach (var altStr in altProducts)
+            foreach (var alt in altStr.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                if (codes.Contains(alt)) matched.Add(alt);
+
+        // Auto-corriger les flags désyncronisés
+        var toFix = items.Where(i => matched.Contains(i.Code)).ToList();
+        if (toFix.Count > 0)
+        {
+            foreach (var inv in toFix) { inv.IsReferenced = true; inv.UpdatedAt = DateTime.UtcNow; }
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(items.Where(i => !matched.Contains(i.Code)).ToList());
     }
 
     [HttpGet("objectifs")]
@@ -205,6 +232,43 @@ public class InventoryController : BellenodeControllerBase
             rows = rows.Where(r => r.statut == status).ToList();
 
         return Ok(rows);
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteItem(int id)
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+        if (!await IsRestaurantAdmin(_db, restaurantId.Value)) return Forbid();
+
+        var item = await _db.Inventory.FirstOrDefaultAsync(i => i.Id == id && i.RestaurantId == restaurantId);
+        if (item is null) return NotFound();
+        if (item.IsReferenced) return BadRequest(new { error = "Ne peut supprimer qu'un item non référencé." });
+
+        _db.Inventory.Remove(item);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("reset")]
+    public async Task<IActionResult> Reset()
+    {
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        if (restaurantId is null) return Forbid();
+        if (!await IsRestaurantAdmin(_db, restaurantId.Value)) return Forbid();
+
+        var items = await _db.Inventory
+            .Where(i => i.RestaurantId == restaurantId)
+            .ToListAsync();
+
+        foreach (var item in items)
+        {
+            item.Quantite = 0;
+            item.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { reset = items.Count });
     }
 
     public record ObjectifInput(int? MinQty, int? MaxQty, int? LotQty);
@@ -308,7 +372,7 @@ public class InventoryController : BellenodeControllerBase
         var ws = wb.AddWorksheet("Inventaire");
 
         // Titre
-        ws.Cell("A1").Value = $"Inventaire — {resto?.Nom ?? ""}";
+        ws.Cell("A1").Value = $"Inventaire - {resto?.Nom ?? ""}";
         ws.Range("A1:K1").Merge();
         ws.Cell("A1").Style.Font.SetBold(true).Font.SetFontSize(14);
         ws.Cell("A2").Value = $"Export du {DateTime.Now:yyyy-MM-dd HH:mm}";

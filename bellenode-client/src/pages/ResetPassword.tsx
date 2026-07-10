@@ -24,7 +24,7 @@ export default function ResetPassword() {
       setOk(true);
       setTimeout(() => navigate('/login'), 2000);
     } catch (e: any) {
-      setErr(e?.response?.data?.error ?? 'Erreur — lien peut-être expiré.');
+      setErr(e?.response?.data?.error ?? 'Erreur, lien peut-être expiré.');
     } finally {
       setLoading(false);
     }
@@ -34,7 +34,7 @@ export default function ResetPassword() {
     return (
       <div className="min-h-[100dvh] bg-bg flex items-center justify-center px-5">
         <div className="card p-6 max-w-sm text-center space-y-3">
-          <p className="text-red-400">Lien invalide — aucun token fourni.</p>
+          <p className="text-red-400">Lien invalide, aucun token fourni.</p>
           <Link to="/forgot-password" className="btn btn-ghost">Redemander un lien</Link>
         </div>
       </div>

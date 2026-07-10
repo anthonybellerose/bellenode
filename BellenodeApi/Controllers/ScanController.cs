@@ -39,7 +39,7 @@ public class ScanController : BellenodeControllerBase
             var mode = ParseMode(raw.Mode);
             if (mode is null) continue;
 
-            var qty = raw.Quantite is > 0 ? raw.Quantite.Value : 1;
+            var qty = raw.Mode == "=" ? (raw.Quantite ?? 0) : (raw.Quantite is > 0 ? raw.Quantite.Value : 1);
             var code = raw.Code.Trim();
 
             if (mappings.TryGetValue(code, out var map))
@@ -63,6 +63,7 @@ public class ScanController : BellenodeControllerBase
         await _db.SaveChangesAsync();
 
         var touchedCodes = new HashSet<string>();
+        var setInitialized = new HashSet<string>();
         var totalAdds = 0;
         var totalSubs = 0;
 
@@ -99,7 +100,15 @@ public class ScanController : BellenodeControllerBase
                     totalSubs += qty;
                     break;
                 case ScanMode.Set:
-                    inv.Quantite = qty;
+                    if (!setInitialized.Contains(code))
+                    {
+                        inv.Quantite = qty;
+                        setInitialized.Add(code);
+                    }
+                    else
+                    {
+                        inv.Quantite += qty;
+                    }
                     break;
             }
 

@@ -58,7 +58,7 @@ export default function BatchDetail() {
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-gray-100 truncate">
-                  {op.isReferenced ? op.nom ?? '—' : <span className="badge badge-yellow">Non référencé</span>}
+                  {op.isReferenced ? op.nom ?? '-' : <span className="badge badge-yellow">Non référencé</span>}
                 </div>
                 <div className="font-mono text-[10px] text-gray-500 truncate">{op.code}</div>
               </div>
@@ -99,7 +99,7 @@ export default function BatchDetail() {
                   <td className="font-mono text-xs text-gray-400">{op.code}</td>
                   <td>
                     {op.isReferenced ? (
-                      op.nom ?? '—'
+                      op.nom ?? '-'
                     ) : (
                       <span className="badge badge-yellow">Non référencé</span>
                     )}

@@ -9,6 +9,8 @@ public class CommandeSAQ
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     [MaxLength(200)] public string? CreatedBy { get; set; }
     [MaxLength(500)] public string? Note { get; set; }
+    [MaxLength(200)] public string? EmailEnvoyeA { get; set; }
+    public DateTime? EmailEnvoyeLe { get; set; }
     public List<CommandeSAQItem> Items { get; set; } = new();
 }
 

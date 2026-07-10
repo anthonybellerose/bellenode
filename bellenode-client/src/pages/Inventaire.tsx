@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { InventoryApi } from '../api/client';
+import { InventoryApi, ScanApi } from '../api/client';
 import type { ObjectifRow, ObjectifStatut } from '../types';
 import UpcInputWithScanner from '../components/UpcInputWithScanner';
 import { useAuth } from '../context/AuthContext';
@@ -11,7 +11,7 @@ const statusLabels: Record<ObjectifStatut | 'ignore', { label: string; badge: st
   ignore:  { label: 'Sans objectif', badge: 'badge-gray' },
 };
 
-type EditForm = { minQty: string; maxQty: string; lotQty: string };
+type EditForm = { minQty: string; maxQty: string; lotQty: string; stockQty: string };
 
 export default function Inventaire() {
   const { isRestaurantAdmin } = useAuth();
@@ -21,7 +21,8 @@ export default function Inventaire() {
   const [search, setSearch] = useState('');
   const [inventoryOnly, setInventoryOnly] = useState(true);
   const [editing, setEditing] = useState<ObjectifRow | null>(null);
-  const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '' });
+  const [form, setForm] = useState<EditForm>({ minQty: '', maxQty: '', lotQty: '', stockQty: '' });
+  const [confirmReset, setConfirmReset] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -56,7 +57,14 @@ export default function Inventaire() {
       minQty: r.minQty?.toString() ?? '',
       maxQty: r.maxQty?.toString() ?? '',
       lotQty: r.lotQty?.toString() ?? '',
+      stockQty: r.qtyActuelle.toString(),
     });
+  }
+
+  async function doReset() {
+    await InventoryApi.reset();
+    setConfirmReset(false);
+    load();
   }
 
   async function saveEdit() {
@@ -65,7 +73,15 @@ export default function Inventaire() {
     const max = form.maxQty.trim() === '' ? 0 : parseInt(form.maxQty);
     const lotRaw = form.lotQty.trim();
     const lot = lotRaw === '' ? null : parseInt(lotRaw);
+    const newStock = form.stockQty.trim() === '' ? editing.qtyActuelle : parseInt(form.stockQty);
     if (isNaN(min) || isNaN(max) || (lot !== null && isNaN(lot)) || min < 0 || max < 0 || (lot !== null && lot < 1)) return;
+    if (isNaN(newStock) || newStock < 0) return;
+    if (newStock !== editing.qtyActuelle) {
+      await ScanApi.submitBatch(
+        [{ mode: '=', code: editing.code, quantite: newStock }],
+        'Ajustement manuel inventaire'
+      );
+    }
     await InventoryApi.setObjectif(editing.code, { minQty: min, maxQty: max, lotQty: lot });
     setEditing(null);
     load();
@@ -80,20 +96,32 @@ export default function Inventaire() {
             {rows.length} produits scannés · {counts.alerte} en alerte
           </p>
         </div>
-        <button
-          className="btn btn-ghost"
-          onClick={async () => {
-            try {
-              const dateStr = new Date().toISOString().slice(0, 10);
-              await InventoryApi.exportExcel(`inventaire-${dateStr}.xlsx`);
-            } catch { alert('Erreur lors de l\'export.'); }
-          }}
-        >
-          📊 Exporter Excel
-        </button>
+        <div className="flex gap-2">
+          {isRestaurantAdmin && (
+            <button className="btn btn-ghost text-red-400 hover:text-red-300" onClick={() => setConfirmReset(true)}>
+              Remettre à zéro
+            </button>
+          )}
+          <button
+            className="btn btn-ghost"
+            onClick={async () => {
+              try {
+                const dateStr = new Date().toISOString().slice(0, 10);
+                await InventoryApi.exportExcel(`inventaire-${dateStr}.xlsx`);
+              } catch { alert('Erreur lors de l\'export.'); }
+            }}
+          >
+            📊 Exporter Excel
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-2 items-center">
+        {isRestaurantAdmin && (
+          <button className="btn btn-ghost text-sm text-red-400 md:hidden" onClick={() => setConfirmReset(true)}>
+            Zéro
+          </button>
+        )}
         <button
           className="btn btn-ghost text-sm md:hidden"
           onClick={async () => {
@@ -163,9 +191,9 @@ export default function Inventaire() {
                       <div className={`text-2xl font-bold ${qtyColor(r)}`}>{r.qtyActuelle}</div>
                       {(r.minQty != null || r.maxQty != null) && (
                         <div className="text-[10px] text-gray-500 mt-0.5">
-                          <span className="text-gray-400">{r.minQty ?? '—'}</span>
+                          <span className="text-gray-400">{r.minQty ?? '-'}</span>
                           <span className="text-gray-600"> / </span>
-                          <span className="text-accent">{r.maxQty ?? '—'}</span>
+                          <span className="text-accent">{r.maxQty ?? '-'}</span>
                           {r.lotEffectif > 1 && <span className="text-gray-600"> ×{r.lotEffectif}</span>}
                         </div>
                       )}
@@ -198,19 +226,19 @@ export default function Inventaire() {
                         <div className="text-[10px] font-mono text-gray-500">{r.code}</div>
                       </td>
                       <td className={`text-right font-bold ${qtyColor(r)}`}>{r.qtyActuelle}</td>
-                      <td className="text-right text-gray-300">{r.minQty ?? '—'}</td>
-                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '—'}</td>
+                      <td className="text-right text-gray-300">{r.minQty ?? '-'}</td>
+                      <td className="text-right text-accent font-semibold">{r.maxQty ?? '-'}</td>
                       <td className="text-right text-gray-400">
                         {r.lotEffectif > 1 ? (
                           <span title={r.lotQty == null ? `Défaut produit: ${r.lotDefault}` : 'Override resto'}>
                             {r.lotEffectif}{r.lotQty == null && r.lotDefault != null && <span className="text-gray-600 text-[10px]"> *</span>}
                           </span>
-                        ) : '—'}
+                        ) : '-'}
                       </td>
                       <td className="text-right">
                         {r.aCommander != null
                           ? <span className="text-orange-400 font-semibold">{r.aCommander}</span>
-                          : <span className="text-gray-600">—</span>}
+                          : <span className="text-gray-600">-</span>}
                       </td>
                       <td><span className={`badge ${statusLabels[r.statut].badge}`}>{statusLabels[r.statut].label}</span></td>
                       {isRestaurantAdmin && (
@@ -229,6 +257,26 @@ export default function Inventaire() {
         )}
       </section>
 
+      {/* Reset confirmation modal */}
+      {confirmReset && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="card p-5 w-full max-w-sm space-y-4">
+            <h3 className="text-lg font-bold text-red-400">Remettre l'inventaire à zéro ?</h3>
+            <p className="text-sm text-gray-300">
+              Toutes les quantités seront remises à <strong className="text-white">0</strong>.
+              Les objectifs (min/max/lot) ne sont pas affectés.
+            </p>
+            <p className="text-xs text-gray-500">Cette action ne peut pas être annulée.</p>
+            <div className="flex gap-2">
+              <button className="btn btn-ghost flex-1" onClick={() => setConfirmReset(false)}>Annuler</button>
+              <button className="btn flex-1 bg-red-700 hover:bg-red-600 text-white" onClick={doReset}>
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -236,8 +284,15 @@ export default function Inventaire() {
             <div>
               <h3 className="text-lg font-bold">{editing.nom}</h3>
               <p className="text-xs font-mono text-gray-500">{editing.code}</p>
-              <p className="text-sm text-gray-400 mt-1">Stock actuel : <strong className="text-white">{editing.qtyActuelle}</strong></p>
             </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Stock actuel</label>
+              <input type="number" inputMode="numeric" min={0}
+                value={form.stockQty}
+                onChange={e => setForm(f => ({ ...f, stockQty: e.target.value }))}
+                className="w-full text-center text-2xl font-bold" style={{ minHeight: 52 }} />
+            </div>
+            <hr className="border-bg-border" />
             <div className="grid grid-cols-3 gap-3">
               {([
                 { field: 'minQty', label: 'Minimum' },

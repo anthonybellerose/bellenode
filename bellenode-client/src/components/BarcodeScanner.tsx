@@ -11,6 +11,8 @@ interface Props {
 
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'codabar', 'itf'];
 
+const hasNativeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
 export default function BarcodeScanner({
   mode,
   onModeChange,
@@ -21,29 +23,32 @@ export default function BarcodeScanner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastDetected = useRef<Map<string, number>>(new Map());
-  const [supported, setSupported] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<Array<{ code: string; time: number }>>([]);
   const [flash, setFlash] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [torchAvailable, setTorchAvailable] = useState(false);
 
+  function handleDetected(raw: string) {
+    if (!raw) return;
+    const now = Date.now();
+    const last = lastDetected.current.get(raw) ?? 0;
+    if (now - last < 2000) return;
+    lastDetected.current.set(raw, now);
+    onDetect(raw);
+    setRecent((prev) => [{ code: raw, time: now }, ...prev.slice(0, 4)]);
+    setFlash(true);
+    setTimeout(() => setFlash(false), 150);
+    navigator.vibrate?.(60);
+    beep();
+  }
+
   useEffect(() => {
-    const BD = (window as any).BarcodeDetector;
-    if (!BD) {
-      setSupported(false);
-      return;
-    }
-    setSupported(true);
-
     let cancelled = false;
-    let detector: any;
-    let intervalId: number | null = null;
+    let cleanup: (() => void) | null = null;
 
-    async function start() {
+    async function startCamera() {
       try {
-        detector = new BD({ formats: FORMATS });
-
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: 'environment' },
@@ -68,51 +73,82 @@ export default function BarcodeScanner({
           await videoRef.current.play();
         }
 
-        intervalId = window.setInterval(async () => {
-          const video = videoRef.current;
-          if (!video || video.readyState < 2) return;
-          try {
-            const codes = await detector.detect(video);
-            if (codes.length > 0) {
-              const now = Date.now();
-              for (const c of codes) {
-                const raw = c.rawValue as string;
-                if (!raw) continue;
-                const last = lastDetected.current.get(raw) ?? 0;
-                if (now - last < 2000) continue;
-                lastDetected.current.set(raw, now);
-                onDetect(raw);
-                setRecent((prev) => [{ code: raw, time: now }, ...prev.slice(0, 4)]);
-                setFlash(true);
-                setTimeout(() => setFlash(false), 150);
-                navigator.vibrate?.(60);
-                beep();
-              }
-            }
-          } catch {
-            // ignore transient errors
-          }
-        }, 250);
+        return stream;
       } catch (e: any) {
-        console.error(e);
-        const msg = e?.name === 'NotAllowedError'
-          ? "Permission caméra refusée. Active-la dans les paramètres du navigateur."
-          : e?.name === 'NotFoundError'
-          ? "Aucune caméra trouvée sur cet appareil."
-          : e?.message || 'Erreur caméra.';
+        const msg =
+          e?.name === 'NotAllowedError'
+            ? 'Permission caméra refusée. Active-la dans les paramètres du navigateur.'
+            : e?.name === 'NotFoundError'
+            ? 'Aucune caméra trouvée sur cet appareil.'
+            : e?.message || 'Erreur caméra.';
         setError(msg);
+        return null;
       }
     }
 
-    start();
+    async function startNative() {
+      const BD = (window as any).BarcodeDetector;
+      const detector = new BD({ formats: FORMATS });
+      const stream = await startCamera();
+      if (!stream || cancelled) return;
+
+      const intervalId = window.setInterval(async () => {
+        const video = videoRef.current;
+        if (!video || video.readyState < 2) return;
+        try {
+          const codes = await detector.detect(video);
+          for (const c of codes) handleDetected(c.rawValue as string);
+        } catch {
+          // ignore transient errors
+        }
+      }, 250);
+
+      cleanup = () => {
+        window.clearInterval(intervalId);
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      };
+    }
+
+    async function startZxing() {
+      try {
+        const { BrowserMultiFormatReader } = await import('@zxing/browser');
+        const reader = new BrowserMultiFormatReader();
+
+        const stream = await startCamera();
+        if (!stream || cancelled) return;
+
+        if (!videoRef.current) return;
+
+        reader.decodeFromStream(stream, videoRef.current, (result, err) => {
+          if (cancelled) return;
+          if (result) handleDetected(result.getText());
+          if (err && !(err as any).message?.includes('No MultiFormat Readers')) {
+            // ignore non-fatal decode errors
+          }
+        });
+
+        cleanup = () => {
+          try { (reader as any).reset?.(); } catch { /* ignore */ }
+          stream.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+        };
+      } catch (e: any) {
+        setError(e?.message || 'Erreur scanner.');
+      }
+    }
+
+    if (hasNativeDetector) {
+      startNative();
+    } else {
+      startZxing();
+    }
 
     return () => {
       cancelled = true;
-      if (intervalId) window.clearInterval(intervalId);
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      cleanup?.();
     };
-  }, [onDetect]);
+  }, []);
 
   async function toggleTorch() {
     const track = streamRef.current?.getVideoTracks()[0];
@@ -123,38 +159,6 @@ export default function BarcodeScanner({
     } catch (e) {
       console.error('Torch non supportée', e);
     }
-  }
-
-  if (supported === null) {
-    return (
-      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-        <div className="text-gray-400">Initialisation...</div>
-      </div>
-    );
-  }
-
-  if (supported === false) {
-    return (
-      <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4">
-        <div className="card p-5 max-w-sm space-y-3">
-          <h3 className="font-bold text-lg">Scanner caméra non supporté</h3>
-          <p className="text-sm text-gray-400">
-            Ce navigateur ne supporte pas la détection de codes-barres via caméra (API
-            <code className="text-gray-300"> BarcodeDetector</code>).
-          </p>
-          <p className="text-sm text-gray-400">
-            <strong className="text-gray-200">Utilise Chrome sur Android</strong> (ou Edge, Samsung
-            Internet). Safari iOS ne supporte pas encore cette API.
-          </p>
-          <p className="text-sm text-gray-500">
-            Alternative: scanner Bluetooth branché comme clavier USB.
-          </p>
-          <button onClick={onClose} className="btn btn-primary w-full">
-            Fermer
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { InventoryApi, ProductsApi } from '../api/client';
 import type { InventoryRow } from '../types';
-
 export default function NonReferenced() {
   const [items, setItems] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,17 +24,31 @@ export default function NonReferenced() {
 
   async function addToProducts() {
     if (!adding) return;
-    await ProductsApi.create({
-      codeUpc: adding.code,
-      nom,
-      codeSaq: codeSaq || null,
-      prix: prix ? parseFloat(prix) : null,
-    });
-    setAdding(null);
-    setNom('');
-    setPrix('');
-    setCodeSaq('');
-    load();
+    try {
+      await ProductsApi.create({
+        codeUpc: adding.code,
+        nom,
+        codeSaq: codeSaq || null,
+        prix: prix ? parseFloat(prix) : null,
+      });
+      setAdding(null);
+      setNom('');
+      setPrix('');
+      setCodeSaq('');
+      load();
+    } catch {
+      alert('Erreur lors de la création du produit.');
+    }
+  }
+
+  async function deleteItem(item: InventoryRow) {
+    if (!confirm(`Supprimer le code "${item.code}" de l'inventaire ?`)) return;
+    try {
+      await InventoryApi.removeItem(item.id);
+      load();
+    } catch {
+      alert('Erreur lors de la suppression.');
+    }
   }
 
   return (
@@ -43,7 +56,7 @@ export default function NonReferenced() {
       <header className="hidden md:block">
         <h2 className="page-title">Non référencés</h2>
         <p className="page-subtitle">
-          Codes scannés qui ne sont pas encore dans le catalogue — {items.length}
+          Codes scannés qui ne sont pas encore dans le catalogue : {items.length}
         </p>
       </header>
 
@@ -69,17 +82,20 @@ export default function NonReferenced() {
                     </div>
                     <div className="text-2xl font-bold text-yellow-400">{item.quantite}</div>
                   </div>
-                  <button
-                    className="btn btn-primary text-sm w-full mt-2"
-                    onClick={() => {
-                      setAdding(item);
-                      setNom('');
-                      setPrix('');
-                      setCodeSaq('');
-                    }}
-                  >
-                    + Ajouter au catalogue
-                  </button>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      className="btn btn-primary text-sm flex-1"
+                      onClick={() => { setAdding(item); setNom(''); setPrix(''); setCodeSaq(''); }}
+                    >
+                      + Ajouter au catalogue
+                    </button>
+                    <button
+                      className="btn btn-ghost text-sm text-red-400 px-3"
+                      onClick={() => deleteItem(item)}
+                    >
+                      Suppr
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -103,17 +119,20 @@ export default function NonReferenced() {
                         {new Date(item.updatedAt).toLocaleString('fr-CA')}
                       </td>
                       <td className="text-right">
-                        <button
-                          className="btn btn-primary text-xs px-3 py-1"
-                          onClick={() => {
-                            setAdding(item);
-                            setNom('');
-                            setPrix('');
-                            setCodeSaq('');
-                          }}
-                        >
-                          Ajouter au catalogue
-                        </button>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            className="btn btn-primary text-xs px-3 py-1"
+                            onClick={() => { setAdding(item); setNom(''); setPrix(''); setCodeSaq(''); }}
+                          >
+                            Ajouter au catalogue
+                          </button>
+                          <button
+                            className="text-red-400 hover:text-red-300 text-xs px-2"
+                            onClick={() => deleteItem(item)}
+                          >
+                            Suppr
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

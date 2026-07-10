@@ -6,6 +6,10 @@ export interface Product {
   prix?: number | null;
   unitesParCaisse?: number | null;
   lotQty?: number | null;
+  altCodes?: string | null; // codes alternatifs séparés par ";"
+  volume?: string | null;
+  imageUrl?: string | null;
+  url?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -137,6 +141,9 @@ export interface CommandeConfig {
   nomEtablissement?: string | null;
   courriel?: string | null;
   responsable?: string | null;
+  emailDestinataire?: string | null;
+  emailSujet?: string | null;
+  emailMessage?: string | null;
 }
 
 export interface CommandeSummary {
@@ -149,6 +156,8 @@ export interface CommandeSummary {
   totalRecues: number;
   nbBackorder: number;
   complete: boolean;
+  emailEnvoyeA?: string | null;
+  emailEnvoyeLe?: string | null;
 }
 
 export interface CommandeItemType {
@@ -160,6 +169,7 @@ export interface CommandeItemType {
   quantiteRecue: number;
   isBackorder: boolean;
   prixUnitaire?: number | null;
+  lotEffectif: number;
 }
 
 export interface PendingCommandeItem {
@@ -179,6 +189,8 @@ export interface CommandeDetail {
   createdAt: string;
   createdBy?: string | null;
   note?: string | null;
+  emailEnvoyeA?: string | null;
+  emailEnvoyeLe?: string | null;
   config: CommandeConfig;
   items: CommandeItemType[];
 }

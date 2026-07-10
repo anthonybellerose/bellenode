@@ -1,8 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CommandesApi } from '../api/client';
-import type { CommandeDetail } from '../types';
+import { CommandesApi, ProductsApi } from '../api/client';
+import type { CommandeDetail, Product } from '../types';
 import { useAuth } from '../context/AuthContext';
+
+type EditItem = { codeSaq: string; nomProduit: string; volume?: string | null; quantite: number; lotEffectif: number };
+
+function extractVolume(nom: string): string | null {
+  const m = nom.match(/\b(\d+(?:[.,]\d+)?\s*(?:ml|mL|L|cl))\b/);
+  return m ? m[1] : null;
+}
+
+function formatQte(quantite: number, lot: number): string {
+  if (lot > 1 && quantite % lot === 0) return `${quantite / lot}cs`;
+  return `${quantite}x`;
+}
 
 export default function CommandeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +26,15 @@ export default function CommandeDetailPage() {
   const [recInputs, setRecInputs] = useState<Record<number, { qty: string; bo: boolean }>>({});
   const [submittingRec, setSubmittingRec] = useState(false);
   const [recMsg, setRecMsg] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailResult, setEmailResult] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editDraft, setEditDraft] = useState<EditItem[]>([]);
+  const [editNote, setEditNote] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSearch, setEditSearch] = useState('');
+  const [editResults, setEditResults] = useState<Product[]>([]);
+  const editSearchRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     if (!id) return;
@@ -31,6 +52,65 @@ export default function CommandeDetailPage() {
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+
+  useEffect(() => {
+    if (editSearch.trim().length < 2) { setEditResults([]); return; }
+    const t = setTimeout(async () => {
+      const products = await ProductsApi.list(editSearch);
+      setEditResults(products.filter(p => !!p.codeSaq));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [editSearch]);
+
+  function openEdit() {
+    if (!commande) return;
+    setEditDraft(commande.items.map(it => ({
+      codeSaq: it.codeSaq,
+      nomProduit: it.nomProduit,
+      volume: it.volume,
+      quantite: it.quantite,
+      lotEffectif: it.lotEffectif,
+    })));
+    setEditNote(commande.note ?? '');
+    setEditSearch('');
+    setEditResults([]);
+    setEditMode(true);
+  }
+
+  function addToEditDraft(p: Product) {
+    const lot = p.lotQty ?? 1;
+    const existing = editDraft.findIndex(d => d.codeSaq === p.codeSaq);
+    if (existing >= 0) {
+      setEditDraft(d => d.map((item, i) => i === existing ? { ...item, quantite: item.quantite + item.lotEffectif } : item));
+    } else {
+      setEditDraft(d => [...d, {
+        codeSaq: p.codeSaq!,
+        nomProduit: p.nom,
+        volume: extractVolume(p.nom),
+        quantite: lot,
+        lotEffectif: lot,
+      }]);
+    }
+    setEditSearch('');
+    setEditResults([]);
+    editSearchRef.current?.focus();
+  }
+
+  async function saveEdit() {
+    if (!commande) return;
+    const items = editDraft.filter(i => i.quantite > 0);
+    if (items.length === 0) return;
+    setEditSaving(true);
+    try {
+      await CommandesApi.update(commande.id, { note: editNote || undefined, items });
+      setEditMode(false);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? 'Erreur lors de la modification.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   if (loading) return <div className="p-8 text-center text-gray-400">Chargement...</div>;
   if (!commande) return <div className="p-8 text-center text-gray-400">Commande introuvable.</div>;
@@ -73,7 +153,7 @@ export default function CommandeDetailPage() {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar — masqué à l'impression */}
+      {/* Toolbar - masqué à l'impression */}
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <button className="btn btn-ghost" onClick={() => navigate('/commandes')}>← Retour</button>
         <span className="text-gray-400 text-sm flex-1">
@@ -84,12 +164,36 @@ export default function CommandeDetailPage() {
               ? <span className="badge badge-yellow ml-2">Partielle ({totalRecues}/{totalBtls})</span>
               : <span className="badge badge-gray ml-2">En attente</span>}
         </span>
+        {isRestaurantAdmin && !commande.emailEnvoyeA && !receiveMode && (
+          <button className="btn btn-ghost" onClick={openEdit}>✏ Modifier</button>
+        )}
         {isRestaurantAdmin && !receiveMode && !complete && (
           <button className="btn btn-primary" onClick={() => setReceiveMode(true)}>📦 Recevoir</button>
         )}
         {!receiveMode && <button className="btn btn-ghost" onClick={() => window.print()}>🖨 Imprimer</button>}
         {!receiveMode && (
-          <button className="btn btn-primary" onClick={() => CommandesApi.exportSaq(commande.id, `commande-saq-${commande.id}.xlsx`)}> Excel SAQ</button>
+          <>
+            <button className="btn btn-primary" onClick={() => CommandesApi.exportSaq(commande.id, `commande-saq-${commande.id}.xlsx`)}> Excel SAQ</button>
+            <button className="btn btn-ghost" disabled={sendingEmail} onClick={async () => {
+              setSendingEmail(true); setEmailResult(null);
+              try {
+                await CommandesApi.sendEmail(commande.id);
+                setEmailResult('ok');
+                await load();
+              } catch (e: any) {
+                setEmailResult(e?.response?.data?.error ?? 'Erreur lors de l\'envoi.');
+              } finally { setSendingEmail(false); }
+            }}>
+              {sendingEmail ? 'Envoi...' : '✉ Envoyer'}
+            </button>
+            {emailResult === 'ok' && <span className="text-green-400 text-sm">Courriel envoyé ✓</span>}
+            {emailResult && emailResult !== 'ok' && <span className="text-red-400 text-sm">{emailResult}</span>}
+            {commande.emailEnvoyeA && !emailResult && (
+              <span className="text-xs text-gray-400">
+                ✓ Envoyé à <strong className="text-gray-300">{commande.emailEnvoyeA}</strong> le {new Date(commande.emailEnvoyeLe!).toLocaleDateString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </>
         )}
       </div>
 
@@ -152,14 +256,14 @@ export default function CommandeDetailPage() {
       )}
 
       {/* Feuille de commande */}
-      <div id="commande-print" className="bg-white text-gray-900 rounded-lg p-6 md:p-10 space-y-6 print:rounded-none print:p-8 print:shadow-none">
+      <div id="commande-print" className="card md:bg-white md:text-gray-900 p-4 md:p-10 space-y-6 print:rounded-none print:p-8 print:shadow-none print:bg-white print:text-gray-900">
 
         {/* En-tête */}
-        <div className="border-b-2 border-gray-800 pb-4">
-          <h1 className="text-2xl font-bold text-center uppercase tracking-wide mb-4">
+        <div className="border-b-2 border-bg-border md:border-gray-800 pb-4">
+          <h1 className="text-xl md:text-2xl font-bold text-center uppercase tracking-wide mb-4 text-gray-100 md:text-gray-900 print:text-gray-900">
             Commande SAQ
           </h1>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
             <InfoLine label="Établissement" value={cfg.nomEtablissement} />
             <InfoLine label="Numéro de client" value={cfg.numeroClient} />
             <InfoLine label="Téléphone" value={cfg.telephone} />
@@ -173,85 +277,221 @@ export default function CommandeDetailPage() {
           </div>
         </div>
 
-        {/* Tableau des items */}
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b-2 border-gray-800">
-              <th className="text-left py-2 pr-4 font-semibold w-28">Code SAQ</th>
-              <th className="text-left py-2 pr-4 font-semibold">Nom du produit</th>
-              <th className="text-left py-2 pr-4 font-semibold w-20">Volume</th>
-              <th className="text-right py-2 pr-4 font-semibold w-20">Qté</th>
-              <th className="text-right py-2 pr-4 font-semibold w-20 print:hidden">Reçu</th>
-              {hasAnyPrix && (
-                <>
-                  <th className="text-right py-2 pr-4 font-semibold w-24">Prix unit.</th>
-                  <th className="text-right py-2 font-semibold w-28">Sous-total</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {commande.items.map((item, i) => {
-              const sousTotal = (item.prixUnitaire ?? 0) * item.quantite;
-              const itemComplete = item.isBackorder || item.quantiteRecue >= item.quantite;
-              return (
-                <tr key={item.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                  <td className="py-2 pr-4 font-mono text-gray-600">{item.codeSaq}</td>
-                  <td className="py-2 pr-4">
+        {/* Mobile : cards */}
+        <ul className="md:hidden divide-y divide-bg-border">
+          {commande.items.map(item => {
+            const itemComplete = item.isBackorder || item.quantiteRecue >= item.quantite;
+            return (
+              <li key={item.id} className="py-3 space-y-0.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium text-gray-100 flex-1">
                     {item.nomProduit.replace(/\s*-\s*\d.*$/, '')}
-                    {item.isBackorder && <span className="ml-2 text-xs text-red-600 font-semibold print:hidden">(Backorder)</span>}
-                  </td>
-                  <td className="py-2 pr-4 text-gray-500">{item.volume ?? '—'}</td>
-                  <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
-                  <td className="py-2 pr-4 text-right print:hidden">
-                    <span className={itemComplete ? 'text-green-700 font-semibold' : item.quantiteRecue > 0 ? 'text-yellow-700' : 'text-gray-400'}>
-                      {item.isBackorder ? 'BO' : `${item.quantiteRecue}/${item.quantite}`}
-                    </span>
-                  </td>
-                  {hasAnyPrix && (
-                    <>
-                      <td className="py-2 pr-4 text-right text-gray-600">
-                        {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '—'}
-                      </td>
-                      <td className="py-2 text-right font-medium">
-                        {item.prixUnitaire != null ? fmt$(sousTotal) : '—'}
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-gray-800">
-              <td colSpan={3} className="py-2 pr-4 font-semibold text-right">Total bouteilles :</td>
-              <td className="py-2 pr-4 text-right font-bold text-lg">{totalBtls}</td>
-              <td className="py-2 pr-4 text-right text-sm print:hidden">
-                <span className={complete ? 'text-green-700' : 'text-yellow-700'}>{totalRecues}/{totalBtls}</span>
-              </td>
-              {hasAnyPrix && (
-                <>
-                  <td className="py-2 pr-4 text-right font-semibold">Total estimé :</td>
-                  <td className="py-2 text-right font-bold text-lg">{fmt$(totalEstime)}</td>
-                </>
-              )}
-            </tr>
-            {hasAnyPrix && (
-              <tr>
-                <td colSpan={7} className="pt-2 text-xs text-gray-500 italic">
-                  * Prix estimé basé sur le prix de base du produit. Peut varier selon le prix SAQ réel.
-                </td>
+                  </span>
+                  <span className="text-base font-bold text-gray-100 shrink-0">
+                    {item.quantite}
+                    <span className="ml-1 text-xs font-normal text-accent">{formatQte(item.quantite, item.lotEffectif)}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-400">
+                  <span className="font-mono">{item.codeSaq}</span>
+                  {item.volume && <span>{item.volume}</span>}
+                  {hasAnyPrix && item.prixUnitaire != null && <span>{fmt$(item.prixUnitaire)} / u</span>}
+                  <span className={`ml-auto font-medium ${itemComplete ? 'text-green-400' : item.quantiteRecue > 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                    {item.isBackorder ? 'Backorder' : `Reçu ${item.quantiteRecue}/${item.quantite}`}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+          <li className="py-3 flex items-center justify-between text-sm font-semibold text-gray-100">
+            <span>Total bouteilles</span>
+            <span>{totalBtls}</span>
+          </li>
+          {hasAnyPrix && (
+            <li className="py-2 flex items-center justify-between text-sm font-semibold text-gray-100">
+              <span>Total estimé</span>
+              <span>{fmt$(totalEstime)}</span>
+            </li>
+          )}
+        </ul>
+
+        {/* Desktop : tableau */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-800">
+                <th className="text-left py-2 pr-4 font-semibold w-28">Code SAQ</th>
+                <th className="text-left py-2 pr-4 font-semibold">Nom du produit</th>
+                <th className="text-left py-2 pr-4 font-semibold w-20">Volume</th>
+                <th className="text-right py-2 pr-4 font-semibold w-20">Qté</th>
+                <th className="text-right py-2 pr-4 font-semibold w-16">SAQ</th>
+                <th className="text-right py-2 pr-4 font-semibold w-20 print:hidden">Reçu</th>
+                {hasAnyPrix && (
+                  <>
+                    <th className="text-right py-2 pr-4 font-semibold w-24">Prix unit.</th>
+                    <th className="text-right py-2 font-semibold w-28">Sous-total</th>
+                  </>
+                )}
               </tr>
-            )}
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {commande.items.map((item, i) => {
+                const sousTotal = (item.prixUnitaire ?? 0) * item.quantite;
+                const itemComplete = item.isBackorder || item.quantiteRecue >= item.quantite;
+                return (
+                  <tr key={item.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                    <td className="py-2 pr-4 font-mono text-gray-600">{item.codeSaq}</td>
+                    <td className="py-2 pr-4">
+                      {item.nomProduit.replace(/\s*-\s*\d.*$/, '')}
+                      {item.isBackorder && <span className="ml-2 text-xs text-red-600 font-semibold print:hidden">(Backorder)</span>}
+                    </td>
+                    <td className="py-2 pr-4 text-gray-500">{item.volume ?? '-'}</td>
+                    <td className="py-2 pr-4 text-right font-bold">{item.quantite}</td>
+                    <td className="py-2 pr-4 text-right font-bold text-accent">{formatQte(item.quantite, item.lotEffectif)}</td>
+                    <td className="py-2 pr-4 text-right print:hidden">
+                      <span className={itemComplete ? 'text-green-700 font-semibold' : item.quantiteRecue > 0 ? 'text-yellow-700' : 'text-gray-400'}>
+                        {item.isBackorder ? 'BO' : `${item.quantiteRecue}/${item.quantite}`}
+                      </span>
+                    </td>
+                    {hasAnyPrix && (
+                      <>
+                        <td className="py-2 pr-4 text-right text-gray-600">
+                          {item.prixUnitaire != null ? fmt$(item.prixUnitaire) : '-'}
+                        </td>
+                        <td className="py-2 text-right font-medium">
+                          {item.prixUnitaire != null ? fmt$(sousTotal) : '-'}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-800">
+                <td colSpan={3} className="py-2 pr-4 font-semibold text-right">Total bouteilles :</td>
+                <td className="py-2 pr-4 text-right font-bold text-lg">{totalBtls}</td>
+                <td className="py-2 pr-4 text-right text-sm print:hidden">
+                  <span className={complete ? 'text-green-700' : 'text-yellow-700'}>{totalRecues}/{totalBtls}</span>
+                </td>
+                {hasAnyPrix && (
+                  <>
+                    <td className="py-2 pr-4 text-right font-semibold">Total estimé :</td>
+                    <td className="py-2 text-right font-bold text-lg">{fmt$(totalEstime)}</td>
+                  </>
+                )}
+              </tr>
+              {hasAnyPrix && (
+                <tr>
+                  <td colSpan={7} className="pt-2 text-xs text-gray-500 italic">
+                    * Prix estimé basé sur le prix de base du produit. Peut varier selon le prix SAQ réel.
+                  </td>
+                </tr>
+              )}
+            </tfoot>
+          </table>
+        </div>
 
         {commande.note && (
-          <div className="text-sm text-gray-600 border-t pt-4">
-            <span className="font-semibold">Note :</span> {commande.note}
+          <div className="text-sm border-t border-bg-border md:border-gray-200 pt-4 text-gray-400 md:text-gray-600 print:text-gray-600">
+            <span className="font-semibold text-gray-100 md:text-gray-900 print:text-gray-900">Note :</span> {commande.note}
           </div>
         )}
       </div>
+
+      {/* Modale édition */}
+      {editMode && (
+        <div className="fixed inset-0 bg-black/80 flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="card w-full max-w-2xl my-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold">Modifier la commande #{commande.id}</h3>
+                <p className="text-xs text-gray-400">{editDraft.filter(i=>i.quantite>0).length} produit(s) · {editDraft.reduce((s,i)=>s+i.quantite,0)} btls</p>
+              </div>
+              <button className="text-gray-400 hover:text-white text-xl" onClick={() => setEditMode(false)}>✕</button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="table-default text-sm">
+                <thead>
+                  <tr>
+                    <th>Produit</th>
+                    <th>Code SAQ</th>
+                    <th>Volume</th>
+                    <th className="text-right w-24">Qté</th>
+                    <th className="text-right w-16">SAQ</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {editDraft.map((item, i) => (
+                    <tr key={i}>
+                      <td className="text-gray-100">{item.nomProduit.replace(/\s*-\s*\d.*$/, '')}</td>
+                      <td className="font-mono text-gray-400 text-xs">{item.codeSaq}</td>
+                      <td className="text-gray-400 text-xs">{item.volume ?? '-'}</td>
+                      <td>
+                        <input type="number" inputMode="numeric" min={0}
+                          value={item.quantite}
+                          onChange={e => {
+                            const q = parseInt(e.target.value) || 0;
+                            setEditDraft(d => d.map((it, idx) => idx === i ? { ...it, quantite: q } : it));
+                          }}
+                          className="w-20 text-center font-bold ml-auto block" />
+                      </td>
+                      <td className="text-right font-bold text-accent text-sm">
+                        {formatQte(item.quantite, item.lotEffectif)}
+                      </td>
+                      <td>
+                        <button className="text-red-400 hover:text-red-300 text-xs px-1"
+                          onClick={() => setEditDraft(d => d.filter((_, idx) => idx !== i))}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="relative">
+              <label className="block text-xs text-gray-400 mb-1">Ajouter un produit manuellement</label>
+              <input
+                ref={editSearchRef}
+                type="text"
+                value={editSearch}
+                onChange={e => setEditSearch(e.target.value)}
+                onBlur={() => setTimeout(() => setEditResults([]), 150)}
+                placeholder="Rechercher par nom ou code SAQ..."
+                className="w-full"
+              />
+              {editResults.length > 0 && (
+                <ul className="absolute z-20 w-full bg-bg-elevated border border-bg-border rounded-md mt-1 max-h-52 overflow-y-auto shadow-lg">
+                  {editResults.map(p => (
+                    <li key={p.id}
+                      onMouseDown={() => addToEditDraft(p)}
+                      className="px-3 py-2 hover:bg-bg-border cursor-pointer">
+                      <div className="text-sm text-gray-100 truncate">{p.nom}</div>
+                      <div className="text-xs text-gray-500 font-mono">{p.codeSaq}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Note (optionnel)</label>
+              <input type="text" value={editNote} onChange={e => setEditNote(e.target.value)}
+                placeholder="Ex: Commande semaine du 21 avril" className="w-full" />
+            </div>
+
+            <div className="flex gap-2">
+              <button className="btn btn-ghost flex-1" onClick={() => setEditMode(false)}>Annuler</button>
+              <button className="btn btn-primary flex-1" onClick={saveEdit}
+                disabled={editSaving || editDraft.filter(i=>i.quantite>0).length === 0}>
+                {editSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -259,8 +499,8 @@ export default function CommandeDetailPage() {
 function InfoLine({ label, value, bold }: { label: string; value?: string | null; bold?: boolean }) {
   return (
     <div className="flex gap-2">
-      <span className="text-gray-500 min-w-36">{label} :</span>
-      <span className={bold ? 'font-bold' : 'font-medium'}>{value || '—'}</span>
+      <span className="text-gray-400 md:text-gray-500 print:text-gray-500 min-w-32">{label} :</span>
+      <span className={`text-gray-100 md:text-gray-900 print:text-gray-900 ${bold ? 'font-bold' : 'font-medium'}`}>{value || '-'}</span>
     </div>
   );
 }
