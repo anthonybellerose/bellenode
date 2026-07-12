@@ -22,6 +22,7 @@ export default function CommandeDetailPage() {
   const { isRestaurantAdmin } = useAuth();
   const [commande, setCommande] = useState<CommandeDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<'notfound' | 'network' | null>(null);
   const [receiveMode, setReceiveMode] = useState(false);
   const [recInputs, setRecInputs] = useState<Record<number, { qty: string; bo: boolean }>>({});
   const [submittingRec, setSubmittingRec] = useState(false);
@@ -39,6 +40,7 @@ export default function CommandeDetailPage() {
   async function load() {
     if (!id) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const c = await CommandesApi.get(Number(id));
       setCommande(c);
@@ -48,6 +50,12 @@ export default function CommandeDetailPage() {
         defaults[it.id] = { qty: it.isBackorder ? '0' : String(restant), bo: it.isBackorder };
       }
       setRecInputs(defaults);
+    } catch (e: any) {
+      // 404/403 = vraiment introuvable/pas accès ; tout le reste (réseau, 500,
+      // timeout) est probablement passager — distinguer pour ne pas faire
+      // croire à une perte de données sur un simple pépin réseau.
+      const status = e?.response?.status;
+      setLoadError(status === 404 || status === 403 ? 'notfound' : 'network');
     } finally { setLoading(false); }
   }
 
@@ -113,6 +121,12 @@ export default function CommandeDetailPage() {
   }
 
   if (loading) return <div className="p-8 text-center text-gray-400">Chargement...</div>;
+  if (loadError === 'network') return (
+    <div className="p-8 text-center text-gray-400 space-y-3">
+      <p>Erreur de chargement — problème réseau temporaire, la commande existe probablement.</p>
+      <button onClick={load} className="btn">Réessayer</button>
+    </div>
+  );
   if (!commande) return <div className="p-8 text-center text-gray-400">Commande introuvable.</div>;
 
   const cfg = commande.config;
