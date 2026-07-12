@@ -51,6 +51,13 @@ SCAN_IMG_PX = 150     # photo sur l'écran de scan
 PLACEHOLDER_TEXT = "📦"
 PLACEHOLDER_FAILED = "🚫"
 
+# Écran Inventaire (défilement + recherche) — vignette plus petite pour caser
+# plus de lignes à l'écran vu qu'il a un clavier tactile en plus des autres écrans.
+INV_IMG_PX = 36
+INV_ROWS_NORMAL = 6   # lignes visibles quand le clavier est fermé
+INV_ROWS_SEARCH = 3   # lignes visibles quand le clavier est ouvert (moins de place)
+INV_SCROLL_STEP = 2   # lignes parcourues par appui sur ▲/▼
+
 
 # ── Formatage des lignes de liste : chaque formatter retourne un dict avec
 # text/id/color/image_code/image_url (les deux derniers None si pas d'image) ──
@@ -124,10 +131,6 @@ FORMATTERS = {
 }
 
 LIST_SCREENS = [
-    dict(key="inventaire", title="Inventaire",
-         header_text=f"{'Produit':<30} {'Qté':>5}  {'Prix':>7}",
-         clickable=False, back_target="menu", show_refresh=True,
-         with_image=True, page_size=5),
     dict(key="stockbas", title="Stock bas",
          header_text=f"{'Produit':<26} {'Actuel':>6}  {'Min':>4}   Statut",
          clickable=False, back_target="menu", show_refresh=True,
@@ -176,6 +179,7 @@ class RaspberryUI:
 
         self._build_scan_screen()
         self._build_menu_screen()
+        self._build_inventaire_screen()
         for spec in LIST_SCREENS:
             self._build_list_screen(**spec)
 
@@ -338,20 +342,254 @@ class RaspberryUI:
             height=2,
         ).pack(fill="x", padx=40, pady=8)
 
+    # ── Écran Inventaire (défilement + recherche + tri, pas de pagination) ───
+
+    def _build_inventaire_screen(self):
+        frame = tk.Frame(self._container, bg=COLORS["bg"])
+        frame.grid(row=0, column=0, sticky="nsew")
+        self._screens["inventaire"] = frame
+
+        topbar = tk.Frame(frame, bg=COLORS["card"], height=52)
+        topbar.pack(fill="x", padx=8, pady=(8, 0))
+        topbar.pack_propagate(False)
+
+        tk.Button(
+            topbar, text="☰ Menu", bg=COLORS["accent"], fg="white",
+            font=("Helvetica", 13, "bold"), relief="flat",
+            command=lambda: self._navigate("menu"),
+        ).pack(side="left", padx=8, pady=6)
+
+        title_label = tk.Label(
+            topbar, text="Inventaire", bg=COLORS["card"], fg=COLORS["text"],
+            font=("Helvetica", 17, "bold"),
+        )
+        title_label.pack(side="left", padx=12)
+
+        updated_label = tk.Label(
+            topbar, text="", bg=COLORS["card"], fg=COLORS["muted"], font=("Helvetica", 10),
+        )
+        updated_label.pack(side="right", padx=8)
+
+        tk.Button(
+            topbar, text="⟳", bg=COLORS["muted"], fg="white",
+            font=("Helvetica", 13, "bold"), relief="flat",
+            command=lambda: self._refresh("inventaire"),
+        ).pack(side="right", padx=4, pady=6)
+
+        # ── Barre outils : recherche + tri ──
+        toolbar = tk.Frame(frame, bg=COLORS["card"], height=38)
+        toolbar.pack(fill="x", padx=8, pady=(4, 0))
+        toolbar.pack_propagate(False)
+
+        search_label = tk.Label(
+            toolbar, text="🔍 Rechercher...", bg=COLORS["card"], fg=COLORS["muted"],
+            font=("Helvetica", 13), anchor="w", cursor="hand2",
+        )
+        search_label.pack(side="left", fill="both", expand=True, padx=10)
+        search_label.bind("<Button-1>", lambda e: self._inv_search_open())
+
+        sort_btn = tk.Button(
+            toolbar, text="🕒 Récent", bg=COLORS["accent"], fg="white",
+            font=("Helvetica", 12, "bold"), relief="flat",
+            command=self._inv_toggle_sort,
+        )
+        sort_btn.pack(side="right", padx=6, pady=4)
+
+        header_row = tk.Frame(frame, bg=COLORS["bg"])
+        header_row.pack(fill="x", padx=16, pady=(6, 1))
+        tk.Frame(header_row, bg=COLORS["bg"], width=INV_IMG_PX + 12).pack(side="left")
+        tk.Label(
+            header_row, text=f"{'Produit':<26} {'Qté':>5}  {'Prix':>7}",
+            bg=COLORS["bg"], fg=COLORS["muted"], font=("Courier", 11, "bold"),
+            anchor="w", justify="left",
+        ).pack(side="left", fill="x", expand=True)
+
+        body = tk.Frame(frame, bg=COLORS["bg"])
+        body.pack(fill="both", expand=True, padx=8)
+        rows = [self._build_row(body, True, img_px=INV_IMG_PX, pady=2) for _ in range(INV_ROWS_NORMAL)]
+
+        # ── Clavier tactile (masqué tant que la recherche n'est pas ouverte) ──
+        keyboard_frame = tk.Frame(frame, bg=COLORS["bg"])
+        key_rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+        for i, letters in enumerate(key_rows):
+            row_f = tk.Frame(keyboard_frame, bg=COLORS["bg"])
+            row_f.pack(fill="x", pady=1)
+            for ch in letters:
+                tk.Button(
+                    row_f, text=ch, bg=COLORS["card"], fg="white",
+                    font=("Helvetica", 11, "bold"), relief="flat",
+                    command=lambda c=ch: self._inv_search_key(c),
+                ).pack(side="left", expand=True, fill="x", padx=1)
+            if i == len(key_rows) - 1:
+                tk.Button(
+                    row_f, text="⌫", bg=COLORS["muted"], fg="white",
+                    font=("Helvetica", 11, "bold"), relief="flat",
+                    command=self._inv_search_backspace,
+                ).pack(side="left", expand=True, fill="x", padx=1)
+
+        bottom_row = tk.Frame(keyboard_frame, bg=COLORS["bg"])
+        bottom_row.pack(fill="x", pady=1)
+        tk.Button(
+            bottom_row, text="␣ Espace", bg=COLORS["card"], fg="white",
+            font=("Helvetica", 11, "bold"), relief="flat",
+            command=lambda: self._inv_search_key(" "),
+        ).pack(side="left", expand=True, fill="x", padx=1)
+        tk.Button(
+            bottom_row, text="✕ Effacer", bg=COLORS["error"], fg="white",
+            font=("Helvetica", 11, "bold"), relief="flat",
+            command=self._inv_search_clear,
+        ).pack(side="left", expand=True, fill="x", padx=1)
+        tk.Button(
+            bottom_row, text="✓ Fermer", bg=COLORS["success"], fg="white",
+            font=("Helvetica", 11, "bold"), relief="flat",
+            command=self._inv_search_close,
+        ).pack(side="left", expand=True, fill="x", padx=1)
+
+        footer = tk.Frame(frame, bg=COLORS["bg"], height=44)
+        footer.pack(fill="x", padx=8, pady=(0, 8))
+        footer.pack_propagate(False)
+
+        tk.Button(
+            footer, text="▲", bg=COLORS["card"], fg="white",
+            font=("Helvetica", 14, "bold"), relief="flat",
+            command=lambda: self._inv_scroll(-1),
+        ).pack(side="left", padx=4, expand=True, fill="x")
+
+        pos_label = tk.Label(
+            footer, text="0 / 0", bg=COLORS["bg"], fg=COLORS["muted"], font=("Helvetica", 12),
+        )
+        pos_label.pack(side="left", padx=10)
+
+        tk.Button(
+            footer, text="▼", bg=COLORS["card"], fg="white",
+            font=("Helvetica", 14, "bold"), relief="flat",
+            command=lambda: self._inv_scroll(1),
+        ).pack(side="left", padx=4, expand=True, fill="x")
+
+        self._lists["inventaire"] = {
+            "data": [], "filtered": [], "offset": 0, "search": "", "search_mode": False,
+            "sort": "recent", "rows": rows, "updated_label": updated_label,
+            "title_label": title_label, "with_image": True, "clickable": False,
+            "pos_label": pos_label, "search_label": search_label, "sort_btn": sort_btn,
+            "keyboard_frame": keyboard_frame,
+        }
+
+    def _inv_toggle_sort(self):
+        st = self._lists["inventaire"]
+        st["sort"] = "alpha" if st["sort"] == "recent" else "recent"
+        st["sort_btn"].config(text="🔤 A-Z" if st["sort"] == "alpha" else "🕒 Récent")
+        self._inv_recompute()
+
+    def _inv_search_open(self):
+        st = self._lists["inventaire"]
+        st["search_mode"] = True
+        for row in st["rows"][INV_ROWS_SEARCH:]:
+            row["frame"].pack_forget()
+        st["keyboard_frame"].pack(fill="x", padx=8, pady=(2, 8))
+        self._inv_render()
+
+    def _inv_search_close(self):
+        st = self._lists["inventaire"]
+        st["search_mode"] = False
+        st["keyboard_frame"].pack_forget()
+        for row in st["rows"][INV_ROWS_SEARCH:]:
+            row["frame"].pack(fill="x", padx=8, pady=row["row_pady"])
+        self._inv_render()
+
+    def _inv_search_key(self, c: str):
+        st = self._lists["inventaire"]
+        st["search"] += c
+        self._inv_update_search_label()
+        self._inv_recompute()
+
+    def _inv_search_backspace(self):
+        st = self._lists["inventaire"]
+        st["search"] = st["search"][:-1]
+        self._inv_update_search_label()
+        self._inv_recompute()
+
+    def _inv_search_clear(self):
+        st = self._lists["inventaire"]
+        st["search"] = ""
+        self._inv_update_search_label()
+        self._inv_recompute()
+
+    def _inv_update_search_label(self):
+        st = self._lists["inventaire"]
+        text = st["search"]
+        st["search_label"].config(
+            text=f"🔍 {text}" if text else "🔍 Rechercher...",
+            fg=COLORS["text"] if text else COLORS["muted"],
+        )
+
+    def _inv_recompute(self):
+        """Recalcule la liste filtrée/triée à partir des données déjà en mémoire —
+        aucun appel réseau, tout se fait sur les données récupérées au dernier
+        rafraîchissement (l'inventaire réel ne fait qu'une centaine de lignes)."""
+        st = self._lists["inventaire"]
+        search = st["search"].strip().lower()
+        data = st["data"]
+        if search:
+            filtered = [d for d in data if search in (d.get("nom") or "").lower()]
+        else:
+            filtered = list(data)
+        if st["sort"] == "alpha":
+            filtered.sort(key=lambda d: (d.get("nom") or "").lower())
+        else:
+            filtered.sort(key=lambda d: d.get("updatedAt") or "", reverse=True)
+        st["filtered"] = filtered
+        st["offset"] = 0
+        self._inv_render()
+
+    def _inv_scroll(self, direction: int):
+        st = self._lists["inventaire"]
+        visible = INV_ROWS_SEARCH if st["search_mode"] else INV_ROWS_NORMAL
+        max_offset = max(0, len(st["filtered"]) - visible)
+        st["offset"] = min(max(0, st["offset"] + direction * INV_SCROLL_STEP), max_offset)
+        self._inv_render()
+
+    def _inv_render(self):
+        st = self._lists["inventaire"]
+        visible = INV_ROWS_SEARCH if st["search_mode"] else INV_ROWS_NORMAL
+        filtered = st["filtered"]
+        max_offset = max(0, len(filtered) - visible)
+        offset = min(st["offset"], max_offset)
+        st["offset"] = offset
+        chunk = filtered[offset:offset + visible]
+
+        for i, row in enumerate(st["rows"]):
+            if i >= visible:
+                continue
+            if i < len(chunk):
+                f = _row_inventaire(chunk[i])
+                row["text_label"].config(text=f["text"], fg=f["color"])
+                self._set_row_image(row, f["image_code"], f["image_url"])
+            else:
+                empty_msg = "Aucun résultat." if (i == 0 and st["search"]) else \
+                            ("Aucune donnée." if (i == 0 and not filtered) else "")
+                row["text_label"].config(text=empty_msg, fg=COLORS["muted"])
+                self._set_row_image(row, None, None)
+
+        if filtered:
+            st["pos_label"].config(text=f"{offset + 1}-{min(offset + visible, len(filtered))} / {len(filtered)}")
+        else:
+            st["pos_label"].config(text="0 / 0")
+
     # ── Écrans de consultation (liste paginée générique) ─────────────────────
 
-    def _build_row(self, parent: tk.Widget, with_image: bool) -> dict:
+    def _build_row(self, parent: tk.Widget, with_image: bool, img_px: int = IMG_THUMB_PX,
+                    pady: int = 2) -> dict:
         row_frame = tk.Frame(parent, bg=COLORS["card"])
-        row_frame.pack(fill="x", padx=8, pady=2 if with_image else 1)
+        row_frame.pack(fill="x", padx=8, pady=pady if with_image else 1)
 
         img_label = None
         if with_image:
-            img_container = tk.Frame(row_frame, bg=COLORS["card"], width=IMG_THUMB_PX, height=IMG_THUMB_PX)
+            img_container = tk.Frame(row_frame, bg=COLORS["card"], width=img_px, height=img_px)
             img_container.pack(side="left", padx=(4, 8), pady=3)
             img_container.pack_propagate(False)
             img_label = tk.Label(
                 img_container, bg=COLORS["card"], fg=COLORS["muted"],
-                text=PLACEHOLDER_TEXT, font=("Helvetica", 16),
+                text=PLACEHOLDER_TEXT, font=("Helvetica", 13),
             )
             img_label.pack(fill="both", expand=True)
 
@@ -361,7 +599,8 @@ class RaspberryUI:
         )
         text_label.pack(side="left", fill="both", expand=True, pady=1)
 
-        return {"frame": row_frame, "img_label": img_label, "text_label": text_label, "code": None}
+        return {"frame": row_frame, "img_label": img_label, "text_label": text_label,
+                "code": None, "img_px": img_px, "row_pady": pady}
 
     def _build_list_screen(self, key: str, title: str, header_text: str, *,
                             clickable: bool, back_target: str, show_refresh: bool,
@@ -469,7 +708,10 @@ class RaspberryUI:
             if row["img_label"] is not None:
                 row["img_label"].config(image="", text="")
                 row["img_label"].image = None
-        st["page_label"].config(text="Page —")
+        if key == "inventaire":
+            st["pos_label"].config(text="—")
+        else:
+            st["page_label"].config(text="Page —")
 
     def _open_batch_detail(self, batch_id: int):
         self._lists["historique_detail"]["title_label"].config(text=f"Batch #{batch_id}")
@@ -538,7 +780,8 @@ class RaspberryUI:
             return
         cached = image_cache.get_cached_path(code)
         if cached:
-            photo = self._load_photo(cached, (IMG_THUMB_PX - 4, IMG_THUMB_PX - 4))
+            px = row["img_px"] - 4
+            photo = self._load_photo(cached, (px, px))
             if photo:
                 lbl.config(image=photo, text="")
                 lbl.image = photo
@@ -557,7 +800,8 @@ class RaspberryUI:
             for row in st["rows"]:
                 if row["code"] != code:
                     continue
-                photo = self._load_photo(path, (IMG_THUMB_PX - 4, IMG_THUMB_PX - 4)) if path else None
+                px = row["img_px"] - 4
+                photo = self._load_photo(path, (px, px)) if path else None
                 if photo:
                     row["img_label"].config(image=photo, text="")
                     row["img_label"].image = photo
@@ -703,9 +947,12 @@ class RaspberryUI:
             _, key, items = item
             st = self._lists[key]
             st["data"] = items or []
-            st["page"] = 0
             st["updated_label"].config(text=f"Maj {datetime.now().strftime('%H:%M:%S')}")
-            self._render_list(key)
+            if key == "inventaire":
+                self._inv_recompute()
+            else:
+                st["page"] = 0
+                self._render_list(key)
 
         elif kind == "imageready":
             _, code, path = item
