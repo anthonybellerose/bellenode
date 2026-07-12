@@ -12,6 +12,7 @@ absente du cache, un placeholder s'affiche tout de suite et le téléchargement
 est délégué à main.py en arrière-plan (on_request_image) — jamais de réseau
 sur le thread tkinter.
 """
+import logging
 import queue
 import tkinter as tk
 from datetime import datetime
@@ -21,6 +22,8 @@ from PIL import Image, ImageTk
 
 import config
 import image_cache
+
+logger = logging.getLogger("ui")
 
 MODE_LABELS = {
     "plus":  ("+ AJOUT",   "#22c55e"),   # vert
@@ -62,7 +65,10 @@ INV_KEYBOARD_H = 260    # hauteur du clavier — posé PAR-DESSUS le bas de la l
 
 # Sortie cachée du kiosque : appui long dans le coin haut-gauche (zone invisible,
 # aucun bouton n'y est jamais placé) + code PIN — voir config.KIOSK_EXIT_PIN.
-HIDDEN_EXIT_ZONE_PX = 60
+# Zone volontairement généreuse (quart d'écran) — un appui de 3,5s est déjà un
+# geste assez délibéré pour ne pas se déclencher par accident, pas besoin de
+# viser un petit coin précis en plus.
+HIDDEN_EXIT_ZONE_PX = 200
 HIDDEN_EXIT_HOLD_MS = 3500
 
 
@@ -325,13 +331,23 @@ class RaspberryUI:
     # continue de tourner en arrière-plan. Rien de visible ne signale ce geste.
 
     def _on_global_press(self, event):
-        x = event.x_root - self.root.winfo_rootx()
-        y = event.y_root - self.root.winfo_rooty()
-        if x < HIDDEN_EXIT_ZONE_PX and y < HIDDEN_EXIT_ZONE_PX:
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        x = event.x_root - rx
+        y = event.y_root - ry
+        in_zone = x < HIDDEN_EXIT_ZONE_PX and y < HIDDEN_EXIT_ZONE_PX
+        # Journal temporaire de diagnostic — appui signalé "ne marche pas" sans
+        # erreur visible, ce log permet de voir si le press est même détecté et
+        # où il tombe réellement (calibration écran tactile / décalage fenêtre).
+        logger.info(
+            f"press écran x_root={event.x_root} y_root={event.y_root} "
+            f"root_pos=({rx},{ry}) -> relatif=({x},{y}) zone_cachée={in_zone}"
+        )
+        if in_zone:
             self._hidden_press_job = self.root.after(HIDDEN_EXIT_HOLD_MS, self._open_exit_pin_dialog)
 
     def _on_global_release(self, event):
         if self._hidden_press_job:
+            logger.info("relâché avant la fin du délai — annulé")
             self.root.after_cancel(self._hidden_press_job)
             self._hidden_press_job = None
 
