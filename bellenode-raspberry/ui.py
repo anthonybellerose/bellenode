@@ -60,6 +60,11 @@ INV_KEYBOARD_H = 260    # hauteur du clavier — posé PAR-DESSUS le bas de la l
                         # (place, pas pack) : les lignes ne disparaissent jamais,
                         # elles sont juste couvertes, pour un effet plus fluide.
 
+# Sortie cachée du kiosque : appui long dans le coin haut-gauche (zone invisible,
+# aucun bouton n'y est jamais placé) + code PIN — voir config.KIOSK_EXIT_PIN.
+HIDDEN_EXIT_ZONE_PX = 60
+HIDDEN_EXIT_HOLD_MS = 3500
+
 
 # ── Formatage des lignes de liste : chaque formatter retourne un dict avec
 # text/id/color/image_code/image_url (les deux derniers None si pas d'image) ──
@@ -168,6 +173,7 @@ class RaspberryUI:
         self._lists: dict[str, dict] = {}
         self._screens: dict[str, tk.Frame] = {}
         self._scan_image_code: str | None = None
+        self._hidden_press_job = None
 
         self.root = tk.Tk()
         self.root.title("Bellenode Scanner")
@@ -184,6 +190,11 @@ class RaspberryUI:
         self._build_inventaire_screen()
         for spec in LIST_SCREENS:
             self._build_list_screen(**spec)
+
+        # Geste de sortie caché : actif partout, peu importe l'écran affiché —
+        # bindé sur root (pas un widget précis) pour ne dépendre d'aucun écran.
+        self.root.bind("<ButtonPress-1>", self._on_global_press, add="+")
+        self.root.bind("<ButtonRelease-1>", self._on_global_release, add="+")
 
         self._current = "scan"
         self._show("scan")
@@ -307,6 +318,94 @@ class RaspberryUI:
                 command=lambda m=mode: self._on_mode_change(m),
                 height=2,
             ).pack(side="left", expand=True, fill="x", padx=4)
+
+    # ── Sortie cachée (kiosque) ────────────────────────────────────────────────
+    # Appui long dans le coin haut-gauche (aucun bouton n'y est jamais placé, sur
+    # aucun écran) + code PIN → sort du plein écran sans arrêter l'app, qui
+    # continue de tourner en arrière-plan. Rien de visible ne signale ce geste.
+
+    def _on_global_press(self, event):
+        x = event.x_root - self.root.winfo_rootx()
+        y = event.y_root - self.root.winfo_rooty()
+        if x < HIDDEN_EXIT_ZONE_PX and y < HIDDEN_EXIT_ZONE_PX:
+            self._hidden_press_job = self.root.after(HIDDEN_EXIT_HOLD_MS, self._open_exit_pin_dialog)
+
+    def _on_global_release(self, event):
+        if self._hidden_press_job:
+            self.root.after_cancel(self._hidden_press_job)
+            self._hidden_press_job = None
+
+    def _open_exit_pin_dialog(self):
+        self._hidden_press_job = None
+        pin = {"value": ""}
+
+        W, H = 340, 380
+        sw, sh = config.DISPLAY_WIDTH, config.DISPLAY_HEIGHT
+        dlg = tk.Toplevel(self.root)
+        dlg.overrideredirect(True)
+        dlg.configure(bg=COLORS["card"])
+        dlg.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+        dlg.attributes("-topmost", True)
+        dlg.grab_set()
+
+        tk.Label(
+            dlg, text="Code de sortie", bg=COLORS["card"], fg=COLORS["text"],
+            font=("Helvetica", 15, "bold"),
+        ).pack(pady=(14, 6))
+
+        dots_label = tk.Label(
+            dlg, text="", bg=COLORS["card"], fg=COLORS["accent"], font=("Helvetica", 24, "bold"),
+        )
+        dots_label.pack(pady=(0, 4))
+
+        error_label = tk.Label(
+            dlg, text="", bg=COLORS["card"], fg=COLORS["error"], font=("Helvetica", 11),
+        )
+        error_label.pack()
+
+        def update_dots():
+            dots_label.config(text="●" * len(pin["value"]))
+
+        def check_pin():
+            if pin["value"] == config.KIOSK_EXIT_PIN:
+                dlg.destroy()
+                self.root.iconify()
+            else:
+                error_label.config(text="Code incorrect")
+                pin["value"] = ""
+                update_dots()
+
+        def press_digit(d: str):
+            if len(pin["value"]) >= 8:
+                return
+            pin["value"] += d
+            error_label.config(text="")
+            update_dots()
+            if len(pin["value"]) == len(config.KIOSK_EXIT_PIN):
+                dlg.after(150, check_pin)
+
+        def backspace():
+            pin["value"] = pin["value"][:-1]
+            error_label.config(text="")
+            update_dots()
+
+        keypad = tk.Frame(dlg, bg=COLORS["card"])
+        keypad.pack(padx=14, pady=6, fill="both", expand=True)
+        rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["✕", "0", "⌫"]]
+        for row in rows:
+            row_f = tk.Frame(keypad, bg=COLORS["card"])
+            row_f.pack(fill="both", expand=True, pady=2)
+            for ch in row:
+                if ch == "✕":
+                    cmd, bg = dlg.destroy, COLORS["error"]
+                elif ch == "⌫":
+                    cmd, bg = backspace, COLORS["muted"]
+                else:
+                    cmd, bg = (lambda d=ch: press_digit(d)), COLORS["bg"]
+                tk.Button(
+                    row_f, text=ch, bg=bg, fg="white", font=("Helvetica", 16, "bold"),
+                    relief="flat", command=cmd,
+                ).pack(side="left", expand=True, fill="both", padx=3)
 
     # ── Écran Menu ────────────────────────────────────────────────────────────
 

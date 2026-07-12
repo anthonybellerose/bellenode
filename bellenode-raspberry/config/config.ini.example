@@ -39,3 +39,8 @@ width  = 800
 height = 480
 
 # Note : l'app démarre toujours en plein écran (forcé dans config.py), pas configurable ici.
+
+[kiosk]
+# Code PIN pour la sortie cachée (appui long 3,5s dans le coin haut-gauche de
+# l'écran de scan). CHANGE CETTE VALEUR — 1234 n'est qu'un défaut de secours.
+exit_pin = 1234

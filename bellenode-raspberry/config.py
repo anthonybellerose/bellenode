@@ -35,8 +35,11 @@ LOWSTOCK_CHECK_INTERVAL = getint("queue", "lowstock_check_interval_seconds", 60)
 
 DISPLAY_WIDTH   = getint("display", "width",  800)
 DISPLAY_HEIGHT  = getint("display", "height", 480)
-# Toujours plein écran sur le Pi — pas de sortie tactile, maintenance via SSH seulement.
+# Toujours plein écran sur le Pi. Sortie tactile cachée : appui long (3,5s) dans
+# le coin haut-gauche + code PIN — voir KIOSK_EXIT_PIN. Change ce PIN dans
+# config.ini, ne jamais laisser la valeur par défaut sur un appareil en service.
 FULLSCREEN      = True
+KIOSK_EXIT_PIN  = get("kiosk", "exit_pin", "1234")
 
 COMMANDS = {CMD_MODE_PLUS, CMD_MODE_MINUS, CMD_MODE_SET, CMD_NEW_BATCH, CMD_SEND_NOW}
 
