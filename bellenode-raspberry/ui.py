@@ -53,8 +53,8 @@ PLACEHOLDER_FAILED = "🚫"
 
 # Écran Inventaire (défilement + recherche) — vignette plus petite pour caser
 # plus de lignes à l'écran vu qu'il a un clavier tactile en plus des autres écrans.
-INV_IMG_PX = 36
-INV_ROWS_NORMAL = 6   # lignes visibles quand le clavier est fermé
+INV_IMG_PX = 30
+INV_ROWS_NORMAL = 8   # lignes visibles quand le clavier est fermé
 INV_ROWS_SEARCH = 3   # lignes visibles quand le clavier est ouvert (moins de place)
 INV_SCROLL_STEP = 2   # lignes parcourues par appui sur ▲/▼
 
@@ -349,129 +349,142 @@ class RaspberryUI:
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens["inventaire"] = frame
 
-        topbar = tk.Frame(frame, bg=COLORS["card"], height=52)
-        topbar.pack(fill="x", padx=8, pady=(8, 0))
+        topbar = tk.Frame(frame, bg=COLORS["card"], height=44)
+        topbar.pack(fill="x", padx=6, pady=(6, 0))
         topbar.pack_propagate(False)
 
         tk.Button(
             topbar, text="☰ Menu", bg=COLORS["accent"], fg="white",
-            font=("Helvetica", 13, "bold"), relief="flat",
+            font=("Helvetica", 12, "bold"), relief="flat",
             command=lambda: self._navigate("menu"),
-        ).pack(side="left", padx=8, pady=6)
+        ).pack(side="left", padx=6, pady=5)
 
         title_label = tk.Label(
             topbar, text="Inventaire", bg=COLORS["card"], fg=COLORS["text"],
-            font=("Helvetica", 17, "bold"),
+            font=("Helvetica", 15, "bold"),
         )
-        title_label.pack(side="left", padx=12)
+        title_label.pack(side="left", padx=10)
 
         updated_label = tk.Label(
-            topbar, text="", bg=COLORS["card"], fg=COLORS["muted"], font=("Helvetica", 10),
+            topbar, text="", bg=COLORS["card"], fg=COLORS["muted"], font=("Helvetica", 9),
         )
-        updated_label.pack(side="right", padx=8)
+        updated_label.pack(side="right", padx=6)
 
         tk.Button(
             topbar, text="⟳", bg=COLORS["muted"], fg="white",
-            font=("Helvetica", 13, "bold"), relief="flat",
+            font=("Helvetica", 12, "bold"), relief="flat",
             command=lambda: self._refresh("inventaire"),
-        ).pack(side="right", padx=4, pady=6)
+        ).pack(side="right", padx=4, pady=5)
 
-        # ── Barre outils : recherche + tri ──
-        toolbar = tk.Frame(frame, bg=COLORS["card"], height=38)
-        toolbar.pack(fill="x", padx=8, pady=(4, 0))
+        # ── Barre outils : recherche + tri — cachée pendant la recherche pour
+        # laisser toute la place au clavier (le texte tapé s'affiche dans le
+        # clavier lui-même à ce moment-là) ──
+        toolbar = tk.Frame(frame, bg=COLORS["card"], height=32)
+        toolbar.pack(fill="x", padx=6, pady=(3, 0))
         toolbar.pack_propagate(False)
 
         search_label = tk.Label(
             toolbar, text="🔍 Rechercher...", bg=COLORS["card"], fg=COLORS["muted"],
-            font=("Helvetica", 13), anchor="w", cursor="hand2",
+            font=("Helvetica", 12), anchor="w", cursor="hand2",
         )
-        search_label.pack(side="left", fill="both", expand=True, padx=10)
+        search_label.pack(side="left", fill="both", expand=True, padx=8)
         search_label.bind("<Button-1>", lambda e: self._inv_search_open())
 
         sort_btn = tk.Button(
             toolbar, text="🕒 Récent", bg=COLORS["accent"], fg="white",
-            font=("Helvetica", 12, "bold"), relief="flat",
+            font=("Helvetica", 11, "bold"), relief="flat",
             command=self._inv_toggle_sort,
         )
-        sort_btn.pack(side="right", padx=6, pady=4)
+        sort_btn.pack(side="right", padx=5, pady=3)
 
         header_row = tk.Frame(frame, bg=COLORS["bg"])
-        header_row.pack(fill="x", padx=16, pady=(6, 1))
-        tk.Frame(header_row, bg=COLORS["bg"], width=INV_IMG_PX + 12).pack(side="left")
+        header_row.pack(fill="x", padx=14, pady=(4, 0))
+        tk.Frame(header_row, bg=COLORS["bg"], width=INV_IMG_PX + 10).pack(side="left")
         tk.Label(
             header_row, text=f"{'Produit':<26} {'Qté':>5}  {'Prix':>7}",
-            bg=COLORS["bg"], fg=COLORS["muted"], font=("Courier", 11, "bold"),
+            bg=COLORS["bg"], fg=COLORS["muted"], font=("Courier", 10, "bold"),
             anchor="w", justify="left",
         ).pack(side="left", fill="x", expand=True)
 
         body = tk.Frame(frame, bg=COLORS["bg"])
-        body.pack(fill="both", expand=True, padx=8)
-        rows = [self._build_row(body, True, img_px=INV_IMG_PX, pady=2) for _ in range(INV_ROWS_NORMAL)]
+        body.pack(fill="both", expand=True, padx=6)
+        rows = [self._build_row(body, True, img_px=INV_IMG_PX, pady=1) for _ in range(INV_ROWS_NORMAL)]
 
-        # ── Clavier tactile (masqué tant que la recherche n'est pas ouverte) ──
-        keyboard_frame = tk.Frame(frame, bg=COLORS["bg"])
-        key_rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
-        for i, letters in enumerate(key_rows):
-            row_f = tk.Frame(keyboard_frame, bg=COLORS["bg"])
-            row_f.pack(fill="x", pady=1)
-            for ch in letters:
-                tk.Button(
-                    row_f, text=ch, bg=COLORS["card"], fg="white",
-                    font=("Helvetica", 11, "bold"), relief="flat",
-                    command=lambda c=ch: self._inv_search_key(c),
-                ).pack(side="left", expand=True, fill="x", padx=1)
-            if i == len(key_rows) - 1:
-                tk.Button(
-                    row_f, text="⌫", bg=COLORS["muted"], fg="white",
-                    font=("Helvetica", 11, "bold"), relief="flat",
-                    command=self._inv_search_backspace,
-                ).pack(side="left", expand=True, fill="x", padx=1)
-
-        bottom_row = tk.Frame(keyboard_frame, bg=COLORS["bg"])
-        bottom_row.pack(fill="x", pady=1)
-        tk.Button(
-            bottom_row, text="␣ Espace", bg=COLORS["card"], fg="white",
-            font=("Helvetica", 11, "bold"), relief="flat",
-            command=lambda: self._inv_search_key(" "),
-        ).pack(side="left", expand=True, fill="x", padx=1)
-        tk.Button(
-            bottom_row, text="✕ Effacer", bg=COLORS["error"], fg="white",
-            font=("Helvetica", 11, "bold"), relief="flat",
-            command=self._inv_search_clear,
-        ).pack(side="left", expand=True, fill="x", padx=1)
-        tk.Button(
-            bottom_row, text="✓ Fermer", bg=COLORS["success"], fg="white",
-            font=("Helvetica", 11, "bold"), relief="flat",
-            command=self._inv_search_close,
-        ).pack(side="left", expand=True, fill="x", padx=1)
-
-        footer = tk.Frame(frame, bg=COLORS["bg"], height=44)
-        footer.pack(fill="x", padx=8, pady=(0, 8))
+        footer = tk.Frame(frame, bg=COLORS["bg"], height=40)
+        footer.pack(fill="x", padx=6, pady=(0, 6))
         footer.pack_propagate(False)
 
         tk.Button(
             footer, text="▲", bg=COLORS["card"], fg="white",
-            font=("Helvetica", 14, "bold"), relief="flat",
+            font=("Helvetica", 13, "bold"), relief="flat",
             command=lambda: self._inv_scroll(-1),
-        ).pack(side="left", padx=4, expand=True, fill="x")
+        ).pack(side="left", padx=3, expand=True, fill="x")
 
         pos_label = tk.Label(
-            footer, text="0 / 0", bg=COLORS["bg"], fg=COLORS["muted"], font=("Helvetica", 12),
+            footer, text="0 / 0", bg=COLORS["bg"], fg=COLORS["muted"], font=("Helvetica", 11),
         )
-        pos_label.pack(side="left", padx=10)
+        pos_label.pack(side="left", padx=8)
 
         tk.Button(
             footer, text="▼", bg=COLORS["card"], fg="white",
-            font=("Helvetica", 14, "bold"), relief="flat",
+            font=("Helvetica", 13, "bold"), relief="flat",
             command=lambda: self._inv_scroll(1),
-        ).pack(side="left", padx=4, expand=True, fill="x")
+        ).pack(side="left", padx=3, expand=True, fill="x")
+
+        # ── Clavier tactile (masqué tant que la recherche n'est pas ouverte).
+        # Prend la place de toolbar/header_row/footer une fois ouvert — ceux-ci
+        # sont retirés (pack_forget) pour laisser un maximum de hauteur aux
+        # touches, plus confortables à taper. ──
+        keyboard_frame = tk.Frame(frame, bg=COLORS["bg"])
+
+        kb_search_label = tk.Label(
+            keyboard_frame, text="🔍 Rechercher...", bg=COLORS["card"], fg=COLORS["text"],
+            font=("Helvetica", 15, "bold"), anchor="w",
+        )
+        kb_search_label.pack(fill="x", padx=6, pady=(0, 6), ipady=6)
+
+        key_rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
+        for i, letters in enumerate(key_rows):
+            row_f = tk.Frame(keyboard_frame, bg=COLORS["bg"])
+            row_f.pack(fill="both", expand=True, pady=2)
+            for ch in letters:
+                tk.Button(
+                    row_f, text=ch, bg=COLORS["card"], fg="white",
+                    font=("Helvetica", 14, "bold"), relief="flat",
+                    command=lambda c=ch: self._inv_search_key(c),
+                ).pack(side="left", expand=True, fill="both", padx=2)
+            if i == len(key_rows) - 1:
+                tk.Button(
+                    row_f, text="⌫", bg=COLORS["muted"], fg="white",
+                    font=("Helvetica", 14, "bold"), relief="flat",
+                    command=self._inv_search_backspace,
+                ).pack(side="left", expand=True, fill="both", padx=2)
+
+        bottom_row = tk.Frame(keyboard_frame, bg=COLORS["bg"])
+        bottom_row.pack(fill="both", expand=True, pady=2)
+        tk.Button(
+            bottom_row, text="␣ Espace", bg=COLORS["card"], fg="white",
+            font=("Helvetica", 14, "bold"), relief="flat",
+            command=lambda: self._inv_search_key(" "),
+        ).pack(side="left", expand=True, fill="both", padx=2)
+        tk.Button(
+            bottom_row, text="✕ Effacer", bg=COLORS["error"], fg="white",
+            font=("Helvetica", 14, "bold"), relief="flat",
+            command=self._inv_search_clear,
+        ).pack(side="left", expand=True, fill="both", padx=2)
+        tk.Button(
+            bottom_row, text="✓ Fermer", bg=COLORS["success"], fg="white",
+            font=("Helvetica", 14, "bold"), relief="flat",
+            command=self._inv_search_close,
+        ).pack(side="left", expand=True, fill="both", padx=2)
 
         self._lists["inventaire"] = {
             "data": [], "filtered": [], "offset": 0, "search": "", "search_mode": False,
             "sort": "recent", "rows": rows, "updated_label": updated_label,
             "title_label": title_label, "with_image": True, "clickable": False,
             "pos_label": pos_label, "search_label": search_label, "sort_btn": sort_btn,
-            "keyboard_frame": keyboard_frame,
+            "keyboard_frame": keyboard_frame, "toolbar": toolbar, "header_row": header_row,
+            "footer": footer, "kb_search_label": kb_search_label, "body": body,
         }
 
     def _inv_toggle_sort(self):
@@ -483,17 +496,27 @@ class RaspberryUI:
     def _inv_search_open(self):
         st = self._lists["inventaire"]
         st["search_mode"] = True
+        st["toolbar"].pack_forget()
+        st["header_row"].pack_forget()
+        st["footer"].pack_forget()
         for row in st["rows"][INV_ROWS_SEARCH:]:
             row["frame"].pack_forget()
-        st["keyboard_frame"].pack(fill="x", padx=8, pady=(2, 8))
+        st["keyboard_frame"].pack(fill="both", expand=True, padx=6, pady=(4, 6))
+        self._inv_update_search_label()
         self._inv_render()
 
     def _inv_search_close(self):
         st = self._lists["inventaire"]
         st["search_mode"] = False
         st["keyboard_frame"].pack_forget()
+        # Réinsérer dans l'ordre d'origine : toolbar puis header, tous deux juste
+        # avant "body" (qui, lui, est resté packé en continu et sert d'ancre
+        # stable) — sinon pack() les rajoute à la fin, après body, ordre inversé.
+        st["toolbar"].pack(fill="x", padx=6, pady=(3, 0), before=st["body"])
+        st["header_row"].pack(fill="x", padx=14, pady=(4, 0), before=st["body"])
         for row in st["rows"][INV_ROWS_SEARCH:]:
-            row["frame"].pack(fill="x", padx=8, pady=row["row_pady"])
+            row["frame"].pack(fill="x", padx=6, pady=row["row_pady"])
+        st["footer"].pack(fill="x", padx=6, pady=(0, 6))
         self._inv_render()
 
     def _inv_search_key(self, c: str):
@@ -517,10 +540,10 @@ class RaspberryUI:
     def _inv_update_search_label(self):
         st = self._lists["inventaire"]
         text = st["search"]
-        st["search_label"].config(
-            text=f"🔍 {text}" if text else "🔍 Rechercher...",
-            fg=COLORS["text"] if text else COLORS["muted"],
-        )
+        label_text = f"🔍 {text}" if text else "🔍 Rechercher..."
+        color = COLORS["text"] if text else COLORS["muted"]
+        st["search_label"].config(text=label_text, fg=color)
+        st["kb_search_label"].config(text=label_text, fg=color)
 
     def _inv_recompute(self):
         """Recalcule la liste filtrée/triée à partir des données déjà en mémoire —
