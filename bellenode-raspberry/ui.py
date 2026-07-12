@@ -358,24 +358,34 @@ class RaspberryUI:
         W, H = 340, 380
         sw, sh = config.DISPLAY_WIDTH, config.DISPLAY_HEIGHT
         dlg = tk.Toplevel(self.root)
-        dlg.overrideredirect(True)
+        # Pas de overrideredirect : sans gestionnaire de fenêtres pour l'aider à
+        # peindre correctement, ce genre de fenêtre "brute" peut mal s'afficher
+        # selon l'environnement du Pi (le Pi tourne labwc/Wayland via XWayland,
+        # différent de l'environnement X11 utilisé pour les tests). transient()
+        # indique explicitement que c'est un dialogue enfant de l'app, pas une
+        # nouvelle fenêtre — sans ça certains gestionnaires (vu en test avec
+        # matchbox) la maximisent en plein écran au lieu de la centrer en petit.
         dlg.configure(bg=COLORS["card"])
+        dlg.title("Code")
+        dlg.transient(self.root)
+        dlg.resizable(False, False)
         dlg.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
-        dlg.attributes("-topmost", True)
-        dlg.grab_set()
+
+        content = tk.Frame(dlg, bg=COLORS["card"])
+        content.pack(fill="both", expand=True)
 
         tk.Label(
-            dlg, text="Code de sortie", bg=COLORS["card"], fg=COLORS["text"],
+            content, text="Code de sortie", bg=COLORS["card"], fg=COLORS["text"],
             font=("Helvetica", 15, "bold"),
         ).pack(pady=(14, 6))
 
         dots_label = tk.Label(
-            dlg, text="", bg=COLORS["card"], fg=COLORS["accent"], font=("Helvetica", 24, "bold"),
+            content, text="", bg=COLORS["card"], fg=COLORS["accent"], font=("Helvetica", 24, "bold"),
         )
         dots_label.pack(pady=(0, 4))
 
         error_label = tk.Label(
-            dlg, text="", bg=COLORS["card"], fg=COLORS["error"], font=("Helvetica", 11),
+            content, text="", bg=COLORS["card"], fg=COLORS["error"], font=("Helvetica", 11),
         )
         error_label.pack()
 
@@ -405,7 +415,7 @@ class RaspberryUI:
             error_label.config(text="")
             update_dots()
 
-        keypad = tk.Frame(dlg, bg=COLORS["card"])
+        keypad = tk.Frame(content, bg=COLORS["card"])
         keypad.pack(padx=14, pady=6, fill="both", expand=True)
         rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["✕", "0", "⌫"]]
         for row in rows:
@@ -417,11 +427,21 @@ class RaspberryUI:
                 elif ch == "⌫":
                     cmd, bg = backspace, COLORS["muted"]
                 else:
-                    cmd, bg = (lambda d=ch: press_digit(d)), COLORS["bg"]
+                    cmd, bg = (lambda d=ch: press_digit(d)), COLORS["border"]
                 tk.Button(
                     row_f, text=ch, bg=bg, fg="white", font=("Helvetica", 16, "bold"),
                     relief="flat", command=cmd,
                 ).pack(side="left", expand=True, fill="both", padx=3)
+
+        # grab_set()/topmost APRÈS que tout soit construit et peint — appelés
+        # trop tôt (avant que la fenêtre soit mappée), le contenu peut rester
+        # blanc/invisible tant que rien ne force un repaint (bug Tk classique
+        # avec overrideredirect + grab_set). update_idletasks() force le dessin
+        # complet avant de prendre le grab et le focus.
+        dlg.update_idletasks()
+        dlg.attributes("-topmost", True)
+        dlg.grab_set()
+        dlg.focus_force()
 
     # ── Écran Menu ────────────────────────────────────────────────────────────
 
