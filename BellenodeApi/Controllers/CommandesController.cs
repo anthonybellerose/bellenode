@@ -125,7 +125,11 @@ public partial class CommandesController : BellenodeControllerBase
             .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
             .Select(p => new { p.CodeSaq, p.CodeUpc, p.Prix, p.LotQty })
             .ToListAsync();
-        var productsBySaq = products.ToDictionary(p => p.CodeSaq!);
+        // GroupBy plutôt que ToDictionary direct : CodeSaq n'est pas garanti unique
+        // dans Products (des doublons existent suite à l'import du catalogue SAQ,
+        // ex: un produit scanné manuellement + le même réimporté avec un autre UPC) —
+        // ToDictionary plantait (clé dupliquée) dès qu'une commande touchait un tel produit.
+        var productsBySaq = products.GroupBy(p => p.CodeSaq!).ToDictionary(g => g.Key, g => g.First());
         var codesUpc = products.Select(p => p.CodeUpc).ToList();
         var objectifByUpc = await _db.RestaurantObjectifs
             .Where(o => o.RestaurantId == restaurantId && codesUpc.Contains(o.CodeUpc))
@@ -485,7 +489,11 @@ public partial class CommandesController : BellenodeControllerBase
             .Where(p => p.CodeSaq != null && codesSaq.Contains(p.CodeSaq))
             .Select(p => new { p.CodeSaq, p.CodeUpc, p.LotQty })
             .ToListAsync();
-        var productsBySaq = products.ToDictionary(p => p.CodeSaq!);
+        // GroupBy plutôt que ToDictionary direct : CodeSaq n'est pas garanti unique
+        // dans Products (des doublons existent suite à l'import du catalogue SAQ,
+        // ex: un produit scanné manuellement + le même réimporté avec un autre UPC) —
+        // ToDictionary plantait (clé dupliquée) dès qu'une commande touchait un tel produit.
+        var productsBySaq = products.GroupBy(p => p.CodeSaq!).ToDictionary(g => g.Key, g => g.First());
         var codesUpc = products.Select(p => p.CodeUpc).ToList();
         var objectifByUpc = await _db.RestaurantObjectifs
             .Where(o => o.RestaurantId == restaurantId && codesUpc.Contains(o.CodeUpc))
