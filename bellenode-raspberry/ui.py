@@ -51,12 +51,14 @@ SCAN_IMG_PX = 150     # photo sur l'écran de scan
 PLACEHOLDER_TEXT = "📦"
 PLACEHOLDER_FAILED = "🚫"
 
-# Écran Inventaire (défilement + recherche) — vignette plus petite pour caser
-# plus de lignes à l'écran vu qu'il a un clavier tactile en plus des autres écrans.
-INV_IMG_PX = 30
-INV_ROWS_NORMAL = 8   # lignes visibles quand le clavier est fermé
-INV_ROWS_SEARCH = 3   # lignes visibles quand le clavier est ouvert (moins de place)
-INV_SCROLL_STEP = 2   # lignes parcourues par appui sur ▲/▼
+# Écran Inventaire (défilement + recherche) — priorité à la lisibilité (grandes
+# vignettes/texte), donc moins de lignes visibles à la fois qu'un écran dense.
+INV_IMG_PX = 42
+INV_ROWS_NORMAL = 6     # lignes visibles quand le clavier est fermé
+INV_SCROLL_STEP = 2     # lignes parcourues par appui sur ▲/▼
+INV_KEYBOARD_H = 260    # hauteur du clavier — posé PAR-DESSUS le bas de la liste
+                        # (place, pas pack) : les lignes ne disparaissent jamais,
+                        # elles sont juste couvertes, pour un effet plus fluide.
 
 
 # ── Formatage des lignes de liste : chaque formatter retourne un dict avec
@@ -376,9 +378,7 @@ class RaspberryUI:
             command=lambda: self._refresh("inventaire"),
         ).pack(side="right", padx=4, pady=5)
 
-        # ── Barre outils : recherche + tri — cachée pendant la recherche pour
-        # laisser toute la place au clavier (le texte tapé s'affiche dans le
-        # clavier lui-même à ce moment-là) ──
+        # ── Barre outils : recherche + tri ──
         toolbar = tk.Frame(frame, bg=COLORS["card"], height=32)
         toolbar.pack(fill="x", padx=6, pady=(3, 0))
         toolbar.pack_propagate(False)
@@ -408,7 +408,8 @@ class RaspberryUI:
 
         body = tk.Frame(frame, bg=COLORS["bg"])
         body.pack(fill="both", expand=True, padx=6)
-        rows = [self._build_row(body, True, img_px=INV_IMG_PX, pady=1) for _ in range(INV_ROWS_NORMAL)]
+        rows = [self._build_row(body, True, img_px=INV_IMG_PX, pady=2, font_size=15)
+                for _ in range(INV_ROWS_NORMAL)]
 
         footer = tk.Frame(frame, bg=COLORS["bg"], height=40)
         footer.pack(fill="x", padx=6, pady=(0, 6))
@@ -431,11 +432,12 @@ class RaspberryUI:
             command=lambda: self._inv_scroll(1),
         ).pack(side="left", padx=3, expand=True, fill="x")
 
-        # ── Clavier tactile (masqué tant que la recherche n'est pas ouverte).
-        # Prend la place de toolbar/header_row/footer une fois ouvert — ceux-ci
-        # sont retirés (pack_forget) pour laisser un maximum de hauteur aux
-        # touches, plus confortables à taper. ──
-        keyboard_frame = tk.Frame(frame, bg=COLORS["bg"])
+        # ── Clavier tactile : posé PAR-DESSUS le bas de l'écran avec place()
+        # plutôt que pack() — les lignes/toolbar/footer en dessous restent
+        # entièrement en place (rien n'est retiré ni ne se réorganise), le
+        # clavier vient juste les couvrir visuellement. Plus fluide qu'un
+        # pack_forget qui faisait "disparaître"/sauter le contenu à l'ouverture.
+        keyboard_frame = tk.Frame(frame, bg=COLORS["bg"], highlightthickness=0)
 
         kb_search_label = tk.Label(
             keyboard_frame, text="🔍 Rechercher...", bg=COLORS["card"], fg=COLORS["text"],
@@ -496,28 +498,14 @@ class RaspberryUI:
     def _inv_search_open(self):
         st = self._lists["inventaire"]
         st["search_mode"] = True
-        st["toolbar"].pack_forget()
-        st["header_row"].pack_forget()
-        st["footer"].pack_forget()
-        for row in st["rows"][INV_ROWS_SEARCH:]:
-            row["frame"].pack_forget()
-        st["keyboard_frame"].pack(fill="both", expand=True, padx=6, pady=(4, 6))
+        st["keyboard_frame"].place(relx=0, rely=1.0, anchor="sw", relwidth=1.0, height=INV_KEYBOARD_H)
+        st["keyboard_frame"].lift()
         self._inv_update_search_label()
-        self._inv_render()
 
     def _inv_search_close(self):
         st = self._lists["inventaire"]
         st["search_mode"] = False
-        st["keyboard_frame"].pack_forget()
-        # Réinsérer dans l'ordre d'origine : toolbar puis header, tous deux juste
-        # avant "body" (qui, lui, est resté packé en continu et sert d'ancre
-        # stable) — sinon pack() les rajoute à la fin, après body, ordre inversé.
-        st["toolbar"].pack(fill="x", padx=6, pady=(3, 0), before=st["body"])
-        st["header_row"].pack(fill="x", padx=14, pady=(4, 0), before=st["body"])
-        for row in st["rows"][INV_ROWS_SEARCH:]:
-            row["frame"].pack(fill="x", padx=6, pady=row["row_pady"])
-        st["footer"].pack(fill="x", padx=6, pady=(0, 6))
-        self._inv_render()
+        st["keyboard_frame"].place_forget()
 
     def _inv_search_key(self, c: str):
         st = self._lists["inventaire"]
@@ -566,23 +554,19 @@ class RaspberryUI:
 
     def _inv_scroll(self, direction: int):
         st = self._lists["inventaire"]
-        visible = INV_ROWS_SEARCH if st["search_mode"] else INV_ROWS_NORMAL
-        max_offset = max(0, len(st["filtered"]) - visible)
+        max_offset = max(0, len(st["filtered"]) - INV_ROWS_NORMAL)
         st["offset"] = min(max(0, st["offset"] + direction * INV_SCROLL_STEP), max_offset)
         self._inv_render()
 
     def _inv_render(self):
         st = self._lists["inventaire"]
-        visible = INV_ROWS_SEARCH if st["search_mode"] else INV_ROWS_NORMAL
         filtered = st["filtered"]
-        max_offset = max(0, len(filtered) - visible)
+        max_offset = max(0, len(filtered) - INV_ROWS_NORMAL)
         offset = min(st["offset"], max_offset)
         st["offset"] = offset
-        chunk = filtered[offset:offset + visible]
+        chunk = filtered[offset:offset + INV_ROWS_NORMAL]
 
         for i, row in enumerate(st["rows"]):
-            if i >= visible:
-                continue
             if i < len(chunk):
                 f = _row_inventaire(chunk[i])
                 row["text_label"].config(text=f["text"], fg=f["color"])
@@ -594,14 +578,15 @@ class RaspberryUI:
                 self._set_row_image(row, None, None)
 
         if filtered:
-            st["pos_label"].config(text=f"{offset + 1}-{min(offset + visible, len(filtered))} / {len(filtered)}")
+            shown_end = min(offset + INV_ROWS_NORMAL, len(filtered))
+            st["pos_label"].config(text=f"{offset + 1}-{shown_end} / {len(filtered)}")
         else:
             st["pos_label"].config(text="0 / 0")
 
     # ── Écrans de consultation (liste paginée générique) ─────────────────────
 
     def _build_row(self, parent: tk.Widget, with_image: bool, img_px: int = IMG_THUMB_PX,
-                    pady: int = 2) -> dict:
+                    pady: int = 2, font_size: int = 13) -> dict:
         row_frame = tk.Frame(parent, bg=COLORS["card"])
         row_frame.pack(fill="x", padx=8, pady=pady if with_image else 1)
 
@@ -612,13 +597,13 @@ class RaspberryUI:
             img_container.pack_propagate(False)
             img_label = tk.Label(
                 img_container, bg=COLORS["card"], fg=COLORS["muted"],
-                text=PLACEHOLDER_TEXT, font=("Helvetica", 13),
+                text=PLACEHOLDER_TEXT, font=("Helvetica", font_size),
             )
             img_label.pack(fill="both", expand=True)
 
         text_label = tk.Label(
             row_frame, text="", bg=COLORS["card"], fg=COLORS["text"],
-            font=("Courier", 13), anchor="w", justify="left",
+            font=("Courier", font_size), anchor="w", justify="left",
         )
         text_label.pack(side="left", fill="both", expand=True, pady=1)
 
