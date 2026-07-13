@@ -55,7 +55,7 @@ COLORS = {
 }
 
 IMG_THUMB_PX = 42     # vignette dans les listes (aligné sur INV_IMG_PX)
-SCAN_IMG_PX = 118     # photo sur l'écran de scan (réduit pour laisser la place à la bande BELLENODE)
+SCAN_IMG_PX = 118     # photo sur l'écran de scan
 PLACEHOLDER_TEXT = "📦"
 PLACEHOLDER_FAILED = "🚫"
 
@@ -93,6 +93,24 @@ def _fmt_dt(iso: str | None) -> str:
         return str(iso)[:16]
 
 
+_MONTHS_FR = ["", "jan", "fév", "mar", "avr", "mai", "jun",
+              "jul", "aoû", "sep", "oct", "nov", "déc"]
+
+
+def _fmt_dt_human(iso: str | None) -> str:
+    """Format court et lisible ("09 jul 16:56") au lieu de l'ISO brut — plus
+    rapide à parcourir d'un coup d'œil dans une liste d'historique."""
+    if not iso:
+        return "—"
+    try:
+        date_part, time_part = iso.split(".")[0].split("T")
+        _, m, d = date_part.split("-")
+        hh, mm = time_part.split(":")[:2]
+        return f"{d} {_MONTHS_FR[int(m)]} {hh}:{mm}"
+    except Exception:
+        return str(iso)[:16]
+
+
 def _row_inventaire(item: dict) -> dict:
     code = item.get("code")
     nom = (item.get("nom") or code or "?")[:30]
@@ -123,12 +141,23 @@ def _row_avenir(item: dict) -> dict:
 
 
 def _row_historique(item: dict) -> dict:
-    dt = _fmt_dt(item.get("createdAt"))
-    who = (item.get("createdBy") or "—")[:12]
-    mvmt = f"+{item.get('totalAjouts', 0)}/-{item.get('totalRetraits', 0)}"
+    """Ligne simplifiée : date lisible + mouvement net coloré (vert=ajouts,
+    rouge=retraits) au lieu du texte cryptique "+0/-10" + nom d'auteur souvent
+    vide — plus rapide à comprendre d'un coup d'œil."""
+    dt = _fmt_dt_human(item.get("createdAt"))
+    ajouts = item.get("totalAjouts", 0)
+    retraits = item.get("totalRetraits", 0)
     produits = item.get("produitsTouches", 0)
-    return {"text": f"{dt:<16} {who:<12} {mvmt:>8}  {produits} prod.", "id": item.get("id"),
-            "color": COLORS["text"], "image_code": None, "image_url": None}
+    if ajouts and retraits:
+        mvmt, color = f"+{ajouts} / -{retraits}", COLORS["text"]
+    elif retraits:
+        mvmt, color = f"-{retraits}", COLORS["error"]
+    elif ajouts:
+        mvmt, color = f"+{ajouts}", COLORS["success"]
+    else:
+        mvmt, color = "0", COLORS["muted"]
+    return {"text": f"{dt:<13} {mvmt:>12}   {produits} produit(s)", "id": item.get("id"),
+            "color": color, "image_code": None, "image_url": None}
 
 
 def _row_operation(op: dict) -> dict:
@@ -156,19 +185,19 @@ LIST_SCREENS = [
     dict(key="stockbas", title="Stock bas",
          header_text=f"{'Produit':<26} {'Actuel':>6}  {'Min':>4}   Statut",
          clickable=False, back_target="menu", show_refresh=True,
-         with_image=False, page_size=9, font_size=15),
+         with_image=False, page_size=10, font_size=15),
     dict(key="avenir", title="Commandes à venir",
          header_text=f"{'Produit':<26} actuel {'':>4}  en route",
          clickable=False, back_target="menu", show_refresh=True,
          with_image=True, page_size=6, font_size=15),
     dict(key="historique", title="Historique",
-         header_text=f"{'Date/heure':<16} {'Par':<12} {'Mvmt':>8}  Produits",
+         header_text=f"{'Date/heure':<13} {'Mouvement':>12}   Produits",
          clickable=True, back_target="menu", show_refresh=True,
-         with_image=False, page_size=9, font_size=15),
+         with_image=False, page_size=10, font_size=15),
     dict(key="historique_detail", title="Détail du batch",
          header_text=f"  {'Produit':<26} {'Avant':>4}   Après",
          clickable=False, back_target="historique", show_refresh=False,
-         with_image=False, page_size=9, font_size=15),
+         with_image=False, page_size=10, font_size=15),
 ]
 
 
@@ -225,24 +254,15 @@ class RaspberryUI:
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens["scan"] = frame
 
-        # ── Bande de marque : "BELLENODE" seul sur sa ligne, centré. Rangée à
-        # part plutôt que superposé à la barre de contrôles — un essai précédent
-        # avec place() au milieu de cette dernière se faisait cacher par le
-        # label "Batch #..." (même zone, "Batch" créé après = par-dessus).
-        brand_bar = tk.Frame(frame, bg=COLORS["card"], height=15)
-        brand_bar.pack(fill="x", padx=8, pady=(4, 0))
-        brand_bar.pack_propagate(False)
-        tk.Label(
-            brand_bar, text="BELLENODE", bg=COLORS["card"], fg=COLORS["accent"],
-            font=("Helvetica", 10, "bold"),
-        ).pack(pady=0)
-
+        # Pas de logo "BELLENODE" ici — trop petit pour être lisible vu l'espace,
+        # et pas nécessaire : les couleurs (bleu accent, palette du site) suffisent
+        # à donner la même identité sans rien sacrifier de la zone produit.
         # ── Header : menu + mode + badges + status connexion ──
         # Bouton Menu à GAUCHE, comme sur tous les autres écrans (Inventaire,
         # Stock bas, etc.) — avant, il était à droite ici seulement, ce qui
         # faisait "sauter" sa position d'un écran à l'autre.
-        header = tk.Frame(frame, bg=COLORS["card"], height=48)
-        header.pack(fill="x", padx=8, pady=(0, 0))
+        header = tk.Frame(frame, bg=COLORS["card"], height=56)
+        header.pack(fill="x", padx=8, pady=(8, 0))
         header.pack_propagate(False)
 
         self._menu_btn = tk.Button(
@@ -288,7 +308,7 @@ class RaspberryUI:
         product_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
         img_container = tk.Frame(product_frame, bg=COLORS["card"], width=SCAN_IMG_PX, height=SCAN_IMG_PX)
-        img_container.pack(pady=(8, 2))
+        img_container.pack(pady=(14, 4))
         img_container.pack_propagate(False)
         self._scan_image_label = tk.Label(
             img_container, bg=COLORS["card"], fg=COLORS["muted"],
@@ -301,7 +321,7 @@ class RaspberryUI:
             bg=COLORS["card"], fg=COLORS["text"],
             font=("Helvetica", 28, "bold"), wraplength=W - 80,
         )
-        self._product_name.pack(pady=(2, 2))
+        self._product_name.pack(pady=(4, 4))
 
         self._product_detail = tk.Label(
             product_frame, text="",
@@ -315,14 +335,14 @@ class RaspberryUI:
             bg=COLORS["card"], fg=COLORS["accent"],
             font=("Helvetica", 22, "bold"),
         )
-        self._stock_label.pack(pady=4)
+        self._stock_label.pack(pady=6)
 
         self._scan_count = tk.Label(
             product_frame, text="0 scan(s) aujourd'hui",
             bg=COLORS["card"], fg=COLORS["muted"],
             font=("Helvetica", 13),
         )
-        self._scan_count.pack(pady=(0, 4))
+        self._scan_count.pack(pady=(0, 6))
 
         # ── Barre de message (erreurs / confirmations) ──
         self._msg_bar = tk.Label(
