@@ -41,8 +41,11 @@ BATCH_MODE_SYMBOLS = {
 # pas besoin d'être identique pixel pour pixel, mais la même identité de marque
 # (le bleu accent #3b82f6 était déjà le même, le reste ne l'était pas).
 COLORS = {
-    "bg":         "#0a0a0d",   # web: bg.DEFAULT
-    "card":       "#16181f",   # web: bg.card
+    "bg":         "#0a0a0d",
+    # Assombri (était #16181f, perçu comme gris) — quasi noir maintenant, la
+    # délimitation des cartes/lignes se fait via une bordure bleue (voir
+    # CARD_BORDER plus bas) plutôt qu'un contraste de gris.
+    "card":       "#0d0e12",
     "elevated":   "#1c1f28",   # web: bg.elevated (boutons secondaires)
     "border":     "#262a36",   # web: bg.border
     "text":       "#ffffff",   # web: text-white
@@ -53,6 +56,10 @@ COLORS = {
     "error":      "#ef4444",
     "warning":    "#f59e0b",
 }
+
+# Bordure bleue utilisée sur les grandes "cartes" autonomes (zone produit de
+# l'écran Scan, etc.) — remplace l'ancienne délimitation par contraste de gris.
+CARD_BORDER = {"highlightbackground": COLORS["accent"], "highlightthickness": 1}
 
 IMG_THUMB_PX = 42     # vignette dans les listes (aligné sur INV_IMG_PX)
 SCAN_IMG_PX = 200     # photo sur l'écran de scan
@@ -306,8 +313,9 @@ class RaspberryUI:
         )
         self._batch_label.pack(side="right", padx=20)
 
-        # ── Zone produit (centre) ──
-        product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat")
+        # ── Zone produit (centre) ── bordure bleue au lieu de la délimitation
+        # par contraste de gris (celle-ci était perçue comme une "ligne noire").
+        product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat", **CARD_BORDER)
         product_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
         img_container = tk.Frame(product_frame, bg=COLORS["card"], width=SCAN_IMG_PX, height=SCAN_IMG_PX)
