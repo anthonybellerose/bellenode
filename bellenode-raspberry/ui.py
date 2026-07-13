@@ -41,11 +41,13 @@ BATCH_MODE_SYMBOLS = {
 # pas besoin d'être identique pixel pour pixel, mais la même identité de marque
 # (le bleu accent #3b82f6 était déjà le même, le reste ne l'était pas).
 COLORS = {
-    "bg":         "#0a0a0d",
-    # Assombri (était #16181f, perçu comme gris) — quasi noir maintenant, la
-    # délimitation des cartes/lignes se fait via une bordure bleue (voir
-    # CARD_BORDER plus bas) plutôt qu'un contraste de gris.
-    "card":       "#0d0e12",
+    # Fond bleu plein écran essayé puis rejeté ("pas beau") — le site web
+    # n'utilise le bleu qu'en accent (boutons, liens, éléments actifs), jamais
+    # comme fond. On garde cet esprit : fond très sombre mais teinté bleu
+    # (pas noir pur) + bordure bleue plus marquée sur les cartes importantes,
+    # pour une identité présente sans être criarde ni nuire à la lisibilité.
+    "bg":         "#080b14",
+    "card":       "#0d1220",
     "elevated":   "#1c1f28",   # web: bg.elevated (boutons secondaires)
     "border":     "#262a36",   # web: bg.border
     "text":       "#ffffff",   # web: text-white
@@ -58,8 +60,9 @@ COLORS = {
 }
 
 # Bordure bleue utilisée sur les grandes "cartes" autonomes (zone produit de
-# l'écran Scan, etc.) — remplace l'ancienne délimitation par contraste de gris.
-CARD_BORDER = {"highlightbackground": COLORS["accent"], "highlightthickness": 1}
+# l'écran Scan, etc.) — plus marquée qu'un simple filet (2px) pour que
+# l'identité Bellenode soit vraiment visible sans couvrir tout l'écran.
+CARD_BORDER = {"highlightbackground": COLORS["accent"], "highlightthickness": 2}
 
 IMG_THUMB_PX = 42     # vignette dans les listes (aligné sur INV_IMG_PX)
 SCAN_IMG_PX = 200     # photo sur l'écran de scan
@@ -258,11 +261,11 @@ class RaspberryUI:
 
     def _build_scan_screen(self):
         W = config.DISPLAY_WIDTH
-        # Fond bleu accent (pas juste une bordure fine) — les espaces entre le
-        # header, la boîte produit et les boutons +/-/= laissent apparaître ce
-        # bleu, comme un "fond d'écran" derrière les cartes noires plutôt qu'une
-        # simple ligne de contour.
-        frame = tk.Frame(self._container, bg=COLORS["accent"])
+        # Fond bleu plein écran essayé puis rejeté (trop saturé, pas beau) —
+        # retour à un fond sombre teinté bleu (COLORS.bg), avec l'identité
+        # Bellenode portée par une bordure bleue plus marquée sur la boîte
+        # produit (CARD_BORDER) plutôt que le fond entier.
+        frame = tk.Frame(self._container, bg=COLORS["bg"])
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens["scan"] = frame
 
@@ -273,7 +276,7 @@ class RaspberryUI:
         # Bouton Menu à GAUCHE, comme sur tous les autres écrans (Inventaire,
         # Stock bas, etc.) — avant, il était à droite ici seulement, ce qui
         # faisait "sauter" sa position d'un écran à l'autre.
-        header = tk.Frame(frame, bg=COLORS["card"], height=56)
+        header = tk.Frame(frame, bg=COLORS["card"], height=56, **CARD_BORDER)
         header.pack(fill="x", padx=8, pady=(8, 0))
         header.pack_propagate(False)
 
@@ -317,9 +320,8 @@ class RaspberryUI:
         )
         self._batch_label.pack(side="right", padx=20)
 
-        # ── Zone produit (centre) — carte noire flottant sur le fond bleu du
-        # cadre parent (visible dans les espacements padx/pady autour d'elle).
-        product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat")
+        # ── Zone produit (centre) — bordure bleue marquée (2px), fond sombre.
+        product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat", **CARD_BORDER)
         product_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
         img_container = tk.Frame(product_frame, bg=COLORS["card"], width=SCAN_IMG_PX, height=SCAN_IMG_PX)
@@ -359,17 +361,15 @@ class RaspberryUI:
         )
         self._scan_count.pack(pady=(0, 6))
 
-        # ── Barre de message (erreurs / confirmations) — même bleu que le
-        # fond du cadre : pas une barre noire séparée entre la boîte et les
-        # boutons, elle se fond dans l'espace bleu tant qu'il n'y a rien à dire.
+        # ── Barre de message (erreurs / confirmations) ──
         self._msg_bar = tk.Label(
-            frame, text="", bg=COLORS["accent"],
+            frame, text="", bg=COLORS["bg"],
             fg=COLORS["warning"], font=("Helvetica", 14),
         )
         self._msg_bar.pack(fill="x", padx=8)
 
         # ── Boutons tactiles bas de page ──
-        btn_frame = tk.Frame(frame, bg=COLORS["accent"])
+        btn_frame = tk.Frame(frame, bg=COLORS["bg"])
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         btn_cfg = [
