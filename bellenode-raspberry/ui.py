@@ -37,19 +37,24 @@ BATCH_MODE_SYMBOLS = {
     "Set":    ("=", "#f59e0b"),
 }
 
+# Mêmes valeurs que bellenode-client/tailwind.config.js (thème du site web) —
+# pas besoin d'être identique pixel pour pixel, mais la même identité de marque
+# (le bleu accent #3b82f6 était déjà le même, le reste ne l'était pas).
 COLORS = {
-    "bg":         "#0f0f1a",
-    "card":       "#1a1a2e",
-    "border":     "#2d2d4e",
-    "text":       "#f1f5f9",
-    "muted":      "#64748b",
-    "accent":     "#3b82f6",
+    "bg":         "#0a0a0d",   # web: bg.DEFAULT
+    "card":       "#16181f",   # web: bg.card
+    "elevated":   "#1c1f28",   # web: bg.elevated (boutons secondaires)
+    "border":     "#262a36",   # web: bg.border
+    "text":       "#ffffff",   # web: text-white
+    "muted":      "#9ca3af",   # web: text-gray-400 (labels/muted)
+    "accent":     "#3b82f6",   # web: accent.DEFAULT
+    "accent_hover": "#2563eb", # web: accent.hover
     "success":    "#22c55e",
     "error":      "#ef4444",
     "warning":    "#f59e0b",
 }
 
-IMG_THUMB_PX = 44     # vignette dans les listes
+IMG_THUMB_PX = 42     # vignette dans les listes (aligné sur INV_IMG_PX)
 SCAN_IMG_PX = 150     # photo sur l'écran de scan
 PLACEHOLDER_TEXT = "📦"
 PLACEHOLDER_FAILED = "🚫"
@@ -143,23 +148,27 @@ FORMATTERS = {
     "historique_detail": _row_operation,
 }
 
+# Même police/vignette que l'écran Inventaire (15pt, 42px) sur tous les écrans
+# de consultation — cohérence demandée entre les pages. page_size réduit en
+# conséquence (texte plus grand = moins de lignes par écran), valeurs testées
+# pour tenir dans 480px (voir tests géométrie).
 LIST_SCREENS = [
     dict(key="stockbas", title="Stock bas",
          header_text=f"{'Produit':<26} {'Actuel':>6}  {'Min':>4}   Statut",
          clickable=False, back_target="menu", show_refresh=True,
-         with_image=False, page_size=8),
+         with_image=False, page_size=9, font_size=15),
     dict(key="avenir", title="Commandes à venir",
          header_text=f"{'Produit':<26} actuel {'':>4}  en route",
          clickable=False, back_target="menu", show_refresh=True,
-         with_image=True, page_size=5),
+         with_image=True, page_size=6, font_size=15),
     dict(key="historique", title="Historique",
          header_text=f"{'Date/heure':<16} {'Par':<12} {'Mvmt':>8}  Produits",
          clickable=True, back_target="menu", show_refresh=True,
-         with_image=False, page_size=8),
+         with_image=False, page_size=9, font_size=15),
     dict(key="historique_detail", title="Détail du batch",
          header_text=f"  {'Produit':<26} {'Avant':>4}   Après",
          clickable=False, back_target="historique", show_refresh=False,
-         with_image=False, page_size=8),
+         with_image=False, page_size=9, font_size=15),
 ]
 
 
@@ -450,10 +459,16 @@ class RaspberryUI:
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens["menu"] = frame
 
+        # Même identité que le site web (Layout.tsx) : "BELLENODE" en bleu accent,
+        # gras, espacé — pas besoin d'être pixel pour pixel, juste reconnaissable.
         tk.Label(
-            frame, text="Menu", bg=COLORS["bg"], fg=COLORS["text"],
-            font=("Helvetica", 26, "bold"),
-        ).pack(pady=(32, 24))
+            frame, text="BELLENODE", bg=COLORS["bg"], fg=COLORS["accent"],
+            font=("Helvetica", 22, "bold"),
+        ).pack(pady=(28, 0))
+        tk.Label(
+            frame, text="Menu", bg=COLORS["bg"], fg=COLORS["muted"],
+            font=("Helvetica", 13),
+        ).pack(pady=(0, 20))
 
         items = [
             ("🏠 Retour au scan",     "scan"),
@@ -508,7 +523,7 @@ class RaspberryUI:
         updated_label.pack(side="right", padx=6)
 
         tk.Button(
-            topbar, text="⟳", bg=COLORS["muted"], fg="white",
+            topbar, text="⟳", bg=COLORS["elevated"], fg="white",
             font=("Helvetica", 12, "bold"), relief="flat",
             command=lambda: self._refresh("inventaire"),
         ).pack(side="right", padx=4, pady=5)
@@ -592,7 +607,7 @@ class RaspberryUI:
                 ).pack(side="left", expand=True, fill="both", padx=2)
             if i == len(key_rows) - 1:
                 tk.Button(
-                    row_f, text="⌫", bg=COLORS["muted"], fg="white",
+                    row_f, text="⌫", bg=COLORS["elevated"], fg="white",
                     font=("Helvetica", 14, "bold"), relief="flat",
                     command=self._inv_search_backspace,
                 ).pack(side="left", expand=True, fill="both", padx=2)
@@ -747,7 +762,7 @@ class RaspberryUI:
 
     def _build_list_screen(self, key: str, title: str, header_text: str, *,
                             clickable: bool, back_target: str, show_refresh: bool,
-                            with_image: bool, page_size: int):
+                            with_image: bool, page_size: int, font_size: int = 15):
         frame = tk.Frame(self._container, bg=COLORS["bg"])
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens[key] = frame
@@ -776,7 +791,7 @@ class RaspberryUI:
 
         if show_refresh:
             tk.Button(
-                topbar, text="⟳ Rafraîchir", bg=COLORS["muted"], fg="white",
+                topbar, text="⟳ Rafraîchir", bg=COLORS["elevated"], fg="white",
                 font=("Helvetica", 12, "bold"), relief="flat",
                 command=lambda k=key: self._refresh(k),
             ).pack(side="right", padx=8, pady=8)
@@ -793,7 +808,7 @@ class RaspberryUI:
         body = tk.Frame(frame, bg=COLORS["bg"])
         body.pack(fill="both", expand=True, padx=8)
 
-        rows = [self._build_row(body, with_image) for _ in range(page_size)]
+        rows = [self._build_row(body, with_image, font_size=font_size) for _ in range(page_size)]
 
         footer = tk.Frame(frame, bg=COLORS["bg"], height=50)
         footer.pack(fill="x", padx=8, pady=(0, 8))
