@@ -55,7 +55,7 @@ COLORS = {
 }
 
 IMG_THUMB_PX = 42     # vignette dans les listes (aligné sur INV_IMG_PX)
-SCAN_IMG_PX = 150     # photo sur l'écran de scan
+SCAN_IMG_PX = 118     # photo sur l'écran de scan (réduit pour laisser la place à la bande BELLENODE)
 PLACEHOLDER_TEXT = "📦"
 PLACEHOLDER_FAILED = "🚫"
 
@@ -225,16 +225,25 @@ class RaspberryUI:
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens["scan"] = frame
 
-        # ── Header : mode + badges + status connexion + menu ──
-        header = tk.Frame(frame, bg=COLORS["card"], height=60)
-        header.pack(fill="x", padx=8, pady=(8, 0))
-        header.pack_propagate(False)
+        # ── Bande de marque : "BELLENODE" seul sur sa ligne, centré. Rangée à
+        # part plutôt que superposé à la barre de contrôles — un essai précédent
+        # avec place() au milieu de cette dernière se faisait cacher par le
+        # label "Batch #..." (même zone, "Batch" créé après = par-dessus).
+        brand_bar = tk.Frame(frame, bg=COLORS["card"], height=15)
+        brand_bar.pack(fill="x", padx=8, pady=(4, 0))
+        brand_bar.pack_propagate(False)
+        tk.Label(
+            brand_bar, text="BELLENODE", bg=COLORS["card"], fg=COLORS["accent"],
+            font=("Helvetica", 10, "bold"),
+        ).pack(pady=0)
 
-        self._mode_label = tk.Label(
-            header, text="- RETRAIT", bg=COLORS["card"],
-            fg=COLORS["error"], font=("Helvetica", 22, "bold"),
-        )
-        self._mode_label.pack(side="left", padx=16)
+        # ── Header : menu + mode + badges + status connexion ──
+        # Bouton Menu à GAUCHE, comme sur tous les autres écrans (Inventaire,
+        # Stock bas, etc.) — avant, il était à droite ici seulement, ce qui
+        # faisait "sauter" sa position d'un écran à l'autre.
+        header = tk.Frame(frame, bg=COLORS["card"], height=48)
+        header.pack(fill="x", padx=8, pady=(0, 0))
+        header.pack_propagate(False)
 
         self._menu_btn = tk.Button(
             header, text="☰", bg=COLORS["card"], fg=COLORS["text"],
@@ -242,7 +251,13 @@ class RaspberryUI:
             activebackground=COLORS["border"],
             command=lambda: self._navigate("menu"),
         )
-        self._menu_btn.pack(side="right", padx=(4, 12))
+        self._menu_btn.pack(side="left", padx=(12, 4))
+
+        self._mode_label = tk.Label(
+            header, text="- RETRAIT", bg=COLORS["card"],
+            fg=COLORS["error"], font=("Helvetica", 22, "bold"),
+        )
+        self._mode_label.pack(side="left", padx=16)
 
         self._status_dot = tk.Label(
             header, text="●", bg=COLORS["card"], fg=COLORS["success"], font=("Helvetica", 18)
@@ -273,7 +288,7 @@ class RaspberryUI:
         product_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
         img_container = tk.Frame(product_frame, bg=COLORS["card"], width=SCAN_IMG_PX, height=SCAN_IMG_PX)
-        img_container.pack(pady=(16, 4))
+        img_container.pack(pady=(8, 2))
         img_container.pack_propagate(False)
         self._scan_image_label = tk.Label(
             img_container, bg=COLORS["card"], fg=COLORS["muted"],
@@ -286,7 +301,7 @@ class RaspberryUI:
             bg=COLORS["card"], fg=COLORS["text"],
             font=("Helvetica", 28, "bold"), wraplength=W - 80,
         )
-        self._product_name.pack(pady=(4, 4))
+        self._product_name.pack(pady=(2, 2))
 
         self._product_detail = tk.Label(
             product_frame, text="",
@@ -300,14 +315,14 @@ class RaspberryUI:
             bg=COLORS["card"], fg=COLORS["accent"],
             font=("Helvetica", 22, "bold"),
         )
-        self._stock_label.pack(pady=8)
+        self._stock_label.pack(pady=4)
 
         self._scan_count = tk.Label(
             product_frame, text="0 scan(s) aujourd'hui",
             bg=COLORS["card"], fg=COLORS["muted"],
             font=("Helvetica", 13),
         )
-        self._scan_count.pack(pady=(0, 8))
+        self._scan_count.pack(pady=(0, 4))
 
         # ── Barre de message (erreurs / confirmations) ──
         self._msg_bar = tk.Label(
