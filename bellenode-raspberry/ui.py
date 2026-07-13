@@ -55,14 +55,14 @@ COLORS = {
 }
 
 IMG_THUMB_PX = 42     # vignette dans les listes (aligné sur INV_IMG_PX)
-SCAN_IMG_PX = 118     # photo sur l'écran de scan
+SCAN_IMG_PX = 200     # photo sur l'écran de scan
 PLACEHOLDER_TEXT = "📦"
 PLACEHOLDER_FAILED = "🚫"
 
 # Écran Inventaire (défilement + recherche) — priorité à la lisibilité (grandes
 # vignettes/texte), donc moins de lignes visibles à la fois qu'un écran dense.
 INV_IMG_PX = 42
-INV_ROWS_NORMAL = 6     # lignes visibles quand le clavier est fermé
+INV_ROWS_NORMAL = 10    # lignes visibles quand le clavier est fermé
 INV_SCROLL_STEP = 2     # lignes parcourues par appui sur ▲/▼
 INV_KEYBOARD_H = 260    # hauteur du clavier — posé PAR-DESSUS le bas de la liste
                         # (place, pas pack) : les lignes ne disparaissent jamais,
@@ -178,26 +178,27 @@ FORMATTERS = {
 }
 
 # Même police/vignette que l'écran Inventaire (15pt, 42px) sur tous les écrans
-# de consultation — cohérence demandée entre les pages. page_size réduit en
-# conséquence (texte plus grand = moins de lignes par écran), valeurs testées
-# pour tenir dans 480px (voir tests géométrie).
+# de consultation — cohérence entre les pages. page_size retesté pour le VRAI
+# écran du Pi (1280x720, pas 800x480 — l'ancienne valeur venait d'un mauvais
+# config.ini qui faisait croire à un écran 3x plus petit, d'où les listes qui
+# ne remplissaient qu'une fraction de l'écran réel).
 LIST_SCREENS = [
     dict(key="stockbas", title="Stock bas",
          header_text=f"{'Produit':<26} {'Actuel':>6}  {'Min':>4}   Statut",
          clickable=False, back_target="menu", show_refresh=True,
-         with_image=False, page_size=10, font_size=15),
+         with_image=False, page_size=18, font_size=15),
     dict(key="avenir", title="Commandes à venir",
          header_text=f"{'Produit':<26} actuel {'':>4}  en route",
          clickable=False, back_target="menu", show_refresh=True,
-         with_image=True, page_size=6, font_size=15),
+         with_image=True, page_size=10, font_size=15),
     dict(key="historique", title="Historique",
          header_text=f"{'Date/heure':<13} {'Mouvement':>12}   Produits",
          clickable=True, back_target="menu", show_refresh=True,
-         with_image=False, page_size=10, font_size=15),
+         with_image=False, page_size=18, font_size=15),
     dict(key="historique_detail", title="Détail du batch",
          header_text=f"  {'Produit':<26} {'Avant':>4}   Après",
          clickable=False, back_target="historique", show_refresh=False,
-         with_image=False, page_size=10, font_size=15),
+         with_image=False, page_size=18, font_size=15),
 ]
 
 
@@ -312,35 +313,35 @@ class RaspberryUI:
         img_container.pack_propagate(False)
         self._scan_image_label = tk.Label(
             img_container, bg=COLORS["card"], fg=COLORS["muted"],
-            text=PLACEHOLDER_TEXT, font=("Helvetica", 40),
+            text=PLACEHOLDER_TEXT, font=("Helvetica", 56),
         )
         self._scan_image_label.pack(fill="both", expand=True)
 
         self._product_name = tk.Label(
             product_frame, text="En attente de scan...",
             bg=COLORS["card"], fg=COLORS["text"],
-            font=("Helvetica", 28, "bold"), wraplength=W - 80,
+            font=("Helvetica", 34, "bold"), wraplength=W - 80,
         )
-        self._product_name.pack(pady=(4, 4))
+        self._product_name.pack(pady=(8, 6))
 
         self._product_detail = tk.Label(
             product_frame, text="",
             bg=COLORS["card"], fg=COLORS["muted"],
-            font=("Helvetica", 18),
+            font=("Helvetica", 20),
         )
         self._product_detail.pack()
 
         self._stock_label = tk.Label(
             product_frame, text="",
             bg=COLORS["card"], fg=COLORS["accent"],
-            font=("Helvetica", 22, "bold"),
+            font=("Helvetica", 26, "bold"),
         )
-        self._stock_label.pack(pady=6)
+        self._stock_label.pack(pady=8)
 
         self._scan_count = tk.Label(
             product_frame, text="0 scan(s) aujourd'hui",
             bg=COLORS["card"], fg=COLORS["muted"],
-            font=("Helvetica", 13),
+            font=("Helvetica", 15),
         )
         self._scan_count.pack(pady=(0, 6))
 

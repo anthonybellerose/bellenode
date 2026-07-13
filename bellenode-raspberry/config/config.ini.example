@@ -34,11 +34,14 @@ status_check_interval_seconds = 10
 lowstock_check_interval_seconds = 60
 
 [display]
-# Taille de la fenêtre (adapter selon l'écran)
-width  = 800
-height = 480
-
-# Note : l'app démarre toujours en plein écran (forcé dans config.py), pas configurable ici.
+# Taille RÉELLE de l'écran connecté (vérifiée via wlr-randr : 720x1280 natif
+# tourné à l'horizontale = 1280x720 utilisable). Sert au calcul de mise en page
+# (nombre d'items par écran, centrage des dialogues) — l'app se lance toujours
+# en plein écran peu importe cette valeur, mais s'il ne s'agit pas du bon
+# chiffre, le contenu ne remplit pas tout l'écran réel (vécu : liste qui
+# s'arrêtait à mi-écran avec l'ancienne valeur 800x480).
+width  = 1280
+height = 720
 
 [kiosk]
 # Code PIN pour la sortie cachée (appui long 3,5s dans le coin haut-gauche de

@@ -33,8 +33,8 @@ RECONCILE_HOUR  = getint("queue", "reconcile_hour", 2)
 STATUS_CHECK_INTERVAL   = getint("queue", "status_check_interval_seconds", 10)
 LOWSTOCK_CHECK_INTERVAL = getint("queue", "lowstock_check_interval_seconds", 60)
 
-DISPLAY_WIDTH   = getint("display", "width",  800)
-DISPLAY_HEIGHT  = getint("display", "height", 480)
+DISPLAY_WIDTH   = getint("display", "width",  1280)
+DISPLAY_HEIGHT  = getint("display", "height", 720)
 # Toujours plein écran sur le Pi. Sortie tactile cachée : appui long (3,5s) dans
 # le coin haut-gauche + code PIN — voir KIOSK_EXIT_PIN. Change ce PIN dans
 # config.ini, ne jamais laisser la valeur par défaut sur un appareil en service.
