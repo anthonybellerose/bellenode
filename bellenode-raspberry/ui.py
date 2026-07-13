@@ -266,10 +266,12 @@ class RaspberryUI:
         header.pack(fill="x", padx=8, pady=(8, 0))
         header.pack_propagate(False)
 
+        # Bleu accent comme tous les boutons Menu/Retour des autres écrans —
+        # avant, celui-ci était gris/foncé, seul écran différent des autres.
         self._menu_btn = tk.Button(
-            header, text="☰", bg=COLORS["card"], fg=COLORS["text"],
+            header, text="☰", bg=COLORS["accent"], fg="white",
             font=("Helvetica", 18, "bold"), relief="flat",
-            activebackground=COLORS["border"],
+            activebackground=COLORS["accent_hover"],
             command=lambda: self._navigate("menu"),
         )
         self._menu_btn.pack(side="left", padx=(12, 4))
