@@ -258,7 +258,11 @@ class RaspberryUI:
 
     def _build_scan_screen(self):
         W = config.DISPLAY_WIDTH
-        frame = tk.Frame(self._container, bg=COLORS["bg"])
+        # Fond bleu accent (pas juste une bordure fine) — les espaces entre le
+        # header, la boîte produit et les boutons +/-/= laissent apparaître ce
+        # bleu, comme un "fond d'écran" derrière les cartes noires plutôt qu'une
+        # simple ligne de contour.
+        frame = tk.Frame(self._container, bg=COLORS["accent"])
         frame.grid(row=0, column=0, sticky="nsew")
         self._screens["scan"] = frame
 
@@ -313,9 +317,9 @@ class RaspberryUI:
         )
         self._batch_label.pack(side="right", padx=20)
 
-        # ── Zone produit (centre) ── bordure bleue au lieu de la délimitation
-        # par contraste de gris (celle-ci était perçue comme une "ligne noire").
-        product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat", **CARD_BORDER)
+        # ── Zone produit (centre) — carte noire flottant sur le fond bleu du
+        # cadre parent (visible dans les espacements padx/pady autour d'elle).
+        product_frame = tk.Frame(frame, bg=COLORS["card"], relief="flat")
         product_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
         img_container = tk.Frame(product_frame, bg=COLORS["card"], width=SCAN_IMG_PX, height=SCAN_IMG_PX)
@@ -355,15 +359,17 @@ class RaspberryUI:
         )
         self._scan_count.pack(pady=(0, 6))
 
-        # ── Barre de message (erreurs / confirmations) ──
+        # ── Barre de message (erreurs / confirmations) — même bleu que le
+        # fond du cadre : pas une barre noire séparée entre la boîte et les
+        # boutons, elle se fond dans l'espace bleu tant qu'il n'y a rien à dire.
         self._msg_bar = tk.Label(
-            frame, text="", bg=COLORS["bg"],
+            frame, text="", bg=COLORS["accent"],
             fg=COLORS["warning"], font=("Helvetica", 14),
         )
         self._msg_bar.pack(fill="x", padx=8)
 
         # ── Boutons tactiles bas de page ──
-        btn_frame = tk.Frame(frame, bg=COLORS["bg"])
+        btn_frame = tk.Frame(frame, bg=COLORS["accent"])
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         btn_cfg = [
