@@ -22,12 +22,32 @@ public class ProductsController : BellenodeControllerBase
             return Ok(Array.Empty<Product>());
 
         var s = search.Trim().ToLower();
-        var query = _db.Products.Where(p =>
-            p.Nom.ToLower().Contains(s) ||
-            p.CodeUpc.Contains(s) ||
-            (p.CodeSaq != null && p.CodeSaq.Contains(s)));
+        var matches = await _db.Products
+            .Where(p => p.Nom.ToLower().Contains(s) ||
+                        p.CodeUpc.Contains(s) ||
+                        (p.CodeSaq != null && p.CodeSaq.Contains(s)))
+            .OrderBy(p => p.Nom)
+            .Take(300)
+            .ToListAsync();
 
-        return Ok(await query.OrderBy(p => p.Nom).Take(50).ToListAsync());
+        // Priorise les produits déjà tenus en inventaire pour ce restaurant (déjà scannés
+        // au moins une fois) avant le reste du catalogue SAQ, pour le retrait manuel par nom.
+        var restaurantId = await GetAuthorizedRestaurantId(_db);
+        var invCodes = restaurantId is null
+            ? new HashSet<string>()
+            : (await _db.Inventory
+                .Where(i => i.RestaurantId == restaurantId)
+                .Select(i => i.Code)
+                .ToListAsync())
+                .ToHashSet();
+
+        var ordered = matches
+            .OrderByDescending(p => invCodes.Contains(p.CodeUpc))
+            .ThenBy(p => p.Nom)
+            .Take(50)
+            .ToList();
+
+        return Ok(ordered);
     }
 
     // Liste allégée (codeUpc, nom, volume, imageUrl) du catalogue complet, sans le
