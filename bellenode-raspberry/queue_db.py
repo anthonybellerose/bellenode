@@ -91,6 +91,15 @@ class LocalQueue:
                 "SELECT COUNT(*) FROM scans WHERE status='pending'"
             ).fetchone()[0]
 
+    def pending_count_for(self, barcode: str, mode: str) -> int:
+        """Nombre de scans en attente pour un code+mode précis — utilisé par le mode SET
+        pour afficher le compte réel en cours (voir main.py::_handle_barcode)."""
+        with self._lock:
+            return self._conn.execute(
+                "SELECT COUNT(*) FROM scans WHERE status='pending' AND barcode=? AND mode=?",
+                (barcode, mode),
+            ).fetchone()[0]
+
     def today_sent_count(self) -> int:
         start_of_day = time.mktime(time.localtime()[:3] + (0, 0, 0, 0, 0, -1))
         with self._lock:

@@ -134,10 +134,18 @@ class BellenodeScanner:
         # Sauvegarde locale immédiate (peu importe si produit connu ou non)
         scan_id = self.db.push(barcode, self.mode, batch_id=0)
 
-        # Mise à jour du stock local optimiste
-        stock_before = self.api.get_stock(barcode)
-        self.api.apply_local_stock(barcode, self.mode)
-        stock_after = self.api.get_stock(barcode)
+        if self.mode == "set":
+            # Le mode SET compte les occurrences plutôt que d'ajuster un stock connu —
+            # affiche la progression du compte en cours (1, 2, 3...) tant que la session
+            # n'est pas confirmée via "Terminer le compte" (voir _finish_set_count).
+            # Avant, ça passait par apply_local_stock qui remettait toujours à 1.
+            count_so_far = self.db.pending_count_for(barcode, "set")
+            stock_before = count_so_far - 1
+            stock_after = count_so_far
+        else:
+            stock_before = self.api.get_stock(barcode)
+            self.api.apply_local_stock(barcode, self.mode)
+            stock_after = self.api.get_stock(barcode)
 
         self.today_scan_count += 1
 
@@ -231,6 +239,8 @@ class BellenodeScanner:
         if result is not None:
             for s in pending:
                 self.db.mark_sent(s.id)
+            for code, qty in counts.items():
+                self.api.set_local_stock(code, qty)
             logger.info(f"Batch #{result.get('batchId')} (compte SET) envoyé avec succès")
             if self.ui:
                 self.ui.update_status(True, self.db.pending_count())

@@ -109,14 +109,20 @@ class BellenodeClient:
         return product.get("imageUrl") if product else None
 
     def apply_local_stock(self, barcode: str, mode: str, qty: int = 1):
-        """Met à jour le stock local immédiatement (avant confirmation serveur)."""
+        """Met à jour le stock local immédiatement (avant confirmation serveur).
+        N'est PAS appelé en mode SET — voir set_local_stock, le compte SET n'est
+        confirmé qu'au bouton "Terminer le compte" (main.py::_finish_set_count)."""
         current = self._stock.get(barcode, 0)
         if mode == "plus":
             self._stock[barcode] = current + qty
         elif mode == "minus":
             self._stock[barcode] = max(0, current - qty)
-        elif mode == "set":
-            self._stock[barcode] = qty
+
+    def set_local_stock(self, barcode: str, qty: int):
+        """Fixe directement le stock local connu — appelé une fois un compte SET
+        confirmé et envoyé avec succès, pour que les +/- suivants partent du bon total
+        sans attendre le prochain refresh_products (login ou réconciliation nocturne)."""
+        self._stock[barcode] = qty
 
     # ── Envoi batch ───────────────────────────────────────────────────────────
 

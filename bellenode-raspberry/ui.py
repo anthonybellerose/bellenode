@@ -15,7 +15,7 @@ sur le thread tkinter.
 import logging
 import queue
 import tkinter as tk
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 from PIL import Image, ImageTk
@@ -109,14 +109,20 @@ _MONTHS_FR = ["", "jan", "fév", "mar", "avr", "mai", "jun",
 
 def _fmt_dt_human(iso: str | None) -> str:
     """Format court et lisible ("09 jul 16:56") au lieu de l'ISO brut — plus
-    rapide à parcourir d'un coup d'œil dans une liste d'historique."""
+    rapide à parcourir d'un coup d'œil dans une liste d'historique.
+
+    Le serveur renvoie l'heure en UTC (suffixe 'Z'). Avant, ce formattage faisait
+    un simple découpage de texte sans conversion de fuseau, donc l'écran affichait
+    l'heure UTC brute au lieu de l'heure locale du Pi (décalage de plusieurs heures)."""
     if not iso:
         return "—"
     try:
-        date_part, time_part = iso.split(".")[0].split("T")
-        _, m, d = date_part.split("-")
-        hh, mm = time_part.split(":")[:2]
-        return f"{d} {_MONTHS_FR[int(m)]} {hh}:{mm}"
+        s = iso[:-1] + "+00:00" if iso.endswith("Z") else iso
+        dt_utc = datetime.fromisoformat(s)
+        if dt_utc.tzinfo is None:
+            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        dt_local = dt_utc.astimezone()
+        return f"{dt_local.day:02d} {_MONTHS_FR[dt_local.month]} {dt_local.hour:02d}:{dt_local.minute:02d}"
     except Exception:
         return str(iso)[:16]
 
