@@ -133,15 +133,27 @@ public class InventoryController : BellenodeControllerBase
             foreach (var alt in altStr.Split(';', StringSplitOptions.RemoveEmptyEntries))
                 if (codes.Contains(alt)) matched.Add(alt);
 
-        // Auto-corriger les flags désyncronisés
+        // Auto-corriger les flags désyncronisés (vrai produit retrouvé)
         var toFix = items.Where(i => matched.Contains(i.Code)).ToList();
-        if (toFix.Count > 0)
-        {
-            foreach (var inv in toFix) { inv.IsReferenced = true; inv.UpdatedAt = DateTime.UtcNow; }
-            await _db.SaveChangesAsync();
-        }
+        foreach (var inv in toFix) { inv.IsReferenced = true; inv.UpdatedAt = DateTime.UtcNow; }
 
-        return Ok(items.Where(i => !matched.Contains(i.Code)).ToList());
+        // Cross-check contre les mappings de caisse. Un code caisse n'accumule jamais son
+        // propre inventaire (ScanController le convertit toujours vers le produit unité au
+        // moment du scan, voir SubmitBatch) — une ligne encore présente pour un code caisse
+        // mappé est donc une ligne orpheline, scannée avant l'ajout du mapping, qui ne sera
+        // plus jamais mise à jour. On la supprime plutôt que de la marquer référencée, pour
+        // ne pas laisser traîner un item sans nom dans l'inventaire.
+        var remaining = items.Where(i => !matched.Contains(i.Code)).ToList();
+        var caisseCodes = new HashSet<string>(await _db.CaisseMappings.Select(m => m.CodeCaisse).ToListAsync());
+        var orphaned = remaining.Where(i => caisseCodes.Contains(i.Code)).ToList();
+        if (orphaned.Count > 0)
+            _db.Inventory.RemoveRange(orphaned);
+
+        if (toFix.Count > 0 || orphaned.Count > 0)
+            await _db.SaveChangesAsync();
+
+        var orphanedIds = orphaned.Select(o => o.Id).ToHashSet();
+        return Ok(remaining.Where(i => !orphanedIds.Contains(i.Id)).ToList());
     }
 
     [HttpGet("objectifs")]
