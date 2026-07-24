@@ -161,6 +161,17 @@ class BellenodeClient:
                 f"Batch envoyé : {len(operations)} op(s) → batch #{result.get('batchId')}"
             )
             return result
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if status is not None and 400 <= status < 500:
+                # Le serveur a rejeté ces données pour de bon (ex: code-barres invalide/trop
+                # long) — pas une panne réseau. Retenter indéfiniment ne changerait rien et
+                # bloquerait la file pour toujours (vu en test le 2026-07-24 : un scan bidon
+                # de touches restées appuyées gardait "1 en attente" figé sur l'écran du Pi).
+                logger.error(f"Batch rejeté définitivement (HTTP {status}), abandonné : {e}")
+                return {"batchId": None, "rejected": True}
+            logger.warning(f"Erreur réseau send_batch : {e}")
+            return None
         except Exception as e:
             logger.warning(f"Erreur réseau send_batch : {e}")
             return None

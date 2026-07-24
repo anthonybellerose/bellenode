@@ -196,10 +196,14 @@ class BellenodeScanner:
         result = self.api.send_batch(ops, note=note)
 
         if result is not None:
-            # Succès — marquer tous comme envoyés
+            # Succès (ou rejet définitif par le serveur, voir send_batch) — dans les
+            # deux cas, retenter ne servirait à rien, donc on marque comme envoyé.
             for s in pending:
                 self.db.mark_sent(s.id)
-            logger.info(f"Batch #{result.get('batchId')} envoyé avec succès")
+            if result.get("rejected"):
+                logger.error(f"Batch rejeté et abandonné ({len(pending)} scan(s))")
+            else:
+                logger.info(f"Batch #{result.get('batchId')} envoyé avec succès")
 
             if self.ui:
                 self.ui.update_status(True, self.db.pending_count())
@@ -239,9 +243,12 @@ class BellenodeScanner:
         if result is not None:
             for s in pending:
                 self.db.mark_sent(s.id)
-            for code, qty in counts.items():
-                self.api.set_local_stock(code, qty)
-            logger.info(f"Batch #{result.get('batchId')} (compte SET) envoyé avec succès")
+            if result.get("rejected"):
+                logger.error(f"Compte SET rejeté et abandonné ({len(counts)} produit(s))")
+            else:
+                for code, qty in counts.items():
+                    self.api.set_local_stock(code, qty)
+                logger.info(f"Batch #{result.get('batchId')} (compte SET) envoyé avec succès")
             if self.ui:
                 self.ui.update_status(True, self.db.pending_count())
                 self.ui.update_batch(result.get("batchId"), len(counts))

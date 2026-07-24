@@ -42,6 +42,13 @@ public class ScanController : BellenodeControllerBase
             var qty = raw.Mode == "=" ? (raw.Quantite ?? 0) : (raw.Quantite is > 0 ? raw.Quantite.Value : 1);
             var code = raw.Code.Trim();
 
+            // Code::Code et InventoryItem::Code sont limités à 32 caractères en BD (MaxLength).
+            // Un code plus long (ex: touches restées appuyées sur un clavier de scan) faisait
+            // planter tout le batch avec un 500 non géré au SaveChangesAsync, et le Pi retentait
+            // ce même scan cassé indéfiniment toutes les 30s sans jamais réussir. On l'ignore
+            // proprement ici à la place.
+            if (code.Length == 0 || code.Length > 32) continue;
+
             if (mappings.TryGetValue(code, out var map))
                 converted.Add((mode.Value, map.CodeUnite, qty * map.Quantite));
             else
