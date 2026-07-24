@@ -51,7 +51,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("CodeCaisse")
                         .IsUnique();
 
-                    b.ToTable("CaisseMappings");
+                    b.ToTable("CaisseMappings", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.CommandeConfig", b =>
@@ -101,7 +101,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("RestaurantId")
                         .IsUnique();
 
-                    b.ToTable("CommandeConfigs");
+                    b.ToTable("CommandeConfigs", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.CommandeSAQ", b =>
@@ -135,7 +135,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CommandesSAQ");
+                    b.ToTable("CommandesSAQ", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.CommandeSAQItem", b =>
@@ -176,7 +176,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasIndex("CommandeId");
 
-                    b.ToTable("CommandeSAQItems");
+                    b.ToTable("CommandeSAQItems", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.InventoryItem", b =>
@@ -209,7 +209,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("Code", "RestaurantId")
                         .IsUnique();
 
-                    b.ToTable("Inventory");
+                    b.ToTable("Inventory", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.InviteToken", b =>
@@ -247,7 +247,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("Token")
                         .IsUnique();
 
-                    b.ToTable("InviteTokens");
+                    b.ToTable("InviteTokens", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.JoinRequest", b =>
@@ -279,7 +279,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("JoinRequests");
+                    b.ToTable("JoinRequests", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.PasswordResetToken", b =>
@@ -314,7 +314,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("PasswordResetTokens");
+                    b.ToTable("PasswordResetTokens", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.Product", b =>
@@ -375,7 +375,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("CodeUpc")
                         .IsUnique();
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.Restaurant", b =>
@@ -399,7 +399,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Restaurants");
+                    b.ToTable("Restaurants", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.RestaurantObjectif", b =>
@@ -432,7 +432,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("RestaurantId", "CodeUpc")
                         .IsUnique();
 
-                    b.ToTable("RestaurantObjectifs");
+                    b.ToTable("RestaurantObjectifs", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.ScanBatch", b =>
@@ -471,7 +471,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ScanBatches");
+                    b.ToTable("ScanBatches", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.ScanOperation", b =>
@@ -509,7 +509,7 @@ namespace BellenodeApi.Migrations
 
                     b.HasIndex("ScanBatchId");
 
-                    b.ToTable("ScanOperations");
+                    b.ToTable("ScanOperations", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.User", b =>
@@ -545,7 +545,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.UserRestaurantAccess", b =>
@@ -572,7 +572,7 @@ namespace BellenodeApi.Migrations
                     b.HasIndex("UserId", "RestaurantId")
                         .IsUnique();
 
-                    b.ToTable("UserRestaurantAccesses");
+                    b.ToTable("UserRestaurantAccesses", (string)null);
                 });
 
             modelBuilder.Entity("BellenodeApi.Models.CommandeSAQItem", b =>

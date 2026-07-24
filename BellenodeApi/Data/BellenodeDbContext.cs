@@ -1,11 +1,38 @@
 using BellenodeApi.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace BellenodeApi.Data;
 
 public class BellenodeDbContext : DbContext
 {
     public BellenodeDbContext(DbContextOptions<BellenodeDbContext> options) : base(options) { }
+
+    // SQL Server ne conserve pas le DateTimeKind : toute date relue depuis la BD revient en
+    // "Unspecified", donc le JSON part sans indicateur de fuseau et le navigateur la réinterprète
+    // comme une heure locale au lieu de la convertir depuis l'UTC. On force Kind=Utc à la lecture
+    // (l'écriture ne change rien, toutes les dates sont déjà DateTime.UtcNow côté C#).
+    private class UtcDateTimeConverter : ValueConverter<DateTime, DateTime>
+    {
+        public UtcDateTimeConverter() : base(
+            v => v,
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc))
+        { }
+    }
+
+    private class UtcNullableDateTimeConverter : ValueConverter<DateTime?, DateTime?>
+    {
+        public UtcNullableDateTimeConverter() : base(
+            v => v,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v)
+        { }
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<UtcNullableDateTimeConverter>();
+    }
 
     public DbSet<Product> Products => Set<Product>();
     public DbSet<CaisseMapping> CaisseMappings => Set<CaisseMapping>();

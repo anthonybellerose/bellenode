@@ -81,6 +81,7 @@ class BellenodeScanner:
             self.ui = RaspberryUI(
                 on_mode_change=self._change_mode,
                 on_new_batch=self._flush_now,
+                on_finish_set=self._finish_set_count,
                 on_navigate=self._on_navigate,
                 on_open_batch_detail=self._on_open_batch_detail,
                 on_request_image=self._on_request_image,
@@ -168,7 +169,14 @@ class BellenodeScanner:
             self._flush_now()
 
     def _flush_now(self):
-        pending = self.db.get_pending()
+        """Envoie les scans +/- en attente. Le mode SET est exclu — voir
+        _finish_set_count : un compte SET doit être confirmé explicitement plutôt que
+        parti par ce flush périodique, sinon une session de comptage qui dépasse 30s se
+        retrouve coupée en plusieurs envois séparés, et le serveur (qui ne sait
+        additionner un SET que DANS un même envoi) réinitialise le compte à chaque
+        nouveau lot au lieu de continuer à l'additionner (bug trouvé en test le
+        2026-07-23 — les quantités retombaient toutes à 1)."""
+        pending = [s for s in self.db.get_pending() if s.mode != "set"]
         if not pending:
             return
 
@@ -186,7 +194,7 @@ class BellenodeScanner:
             logger.info(f"Batch #{result.get('batchId')} envoyé avec succès")
 
             if self.ui:
-                self.ui.update_status(True, 0)
+                self.ui.update_status(True, self.db.pending_count())
                 self.ui.update_batch(result.get("batchId"), len(pending))
         else:
             # Échec réseau — incrémenter les tentatives, réessai au prochain flush
@@ -195,7 +203,45 @@ class BellenodeScanner:
             logger.warning("Envoi échoué — nouveau essai dans 30s")
 
             if self.ui:
-                self.ui.update_status(False, len(pending))
+                self.ui.update_status(False, self.db.pending_count())
+
+    def _finish_set_count(self):
+        """Appelé par le bouton explicite 'Terminer le compte' de l'écran Scan (mode SET
+        uniquement). Regroupe tous les scans SET en attente par code-barres (compte le
+        nombre de fois où chacun a été scanné) et envoie UN SEUL lot avec le total final
+        par produit — le serveur applique alors le compte correctement puisque tout
+        arrive dans le même envoi (voir _flush_now)."""
+        pending = [s for s in self.db.get_pending() if s.mode == "set"]
+        if not pending:
+            if self.ui:
+                self.ui.show_error("Aucun scan en mode SET à confirmer.")
+            return
+
+        counts: dict[str, int] = {}
+        for s in pending:
+            counts[s.barcode] = counts.get(s.barcode, 0) + 1
+
+        logger.info(f"Confirmation du compte SET : {len(counts)} produit(s), {len(pending)} scan(s)")
+
+        ops = [{"mode": "set", "code": code, "quantite": qty} for code, qty in counts.items()]
+        note = f"Raspberry Pi — compte SET {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+        result = self.api.send_batch(ops, note=note)
+
+        if result is not None:
+            for s in pending:
+                self.db.mark_sent(s.id)
+            logger.info(f"Batch #{result.get('batchId')} (compte SET) envoyé avec succès")
+            if self.ui:
+                self.ui.update_status(True, self.db.pending_count())
+                self.ui.update_batch(result.get("batchId"), len(counts))
+        else:
+            for s in pending:
+                self.db.increment_attempt(s.id)
+            logger.warning("Envoi du compte SET échoué — réessaie via le bouton Terminer")
+            if self.ui:
+                self.ui.show_error("Échec de l'envoi — réessaie.")
+                self.ui.update_status(False, self.db.pending_count())
 
     # ── Vérification périodique de la connexion réseau ───────────────────────
 

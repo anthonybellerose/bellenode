@@ -215,11 +215,13 @@ LIST_SCREENS = [
 class RaspberryUI:
     def __init__(self, on_mode_change: Callable[[str], None],
                  on_new_batch: Callable[[], None],
+                 on_finish_set: Callable[[], None],
                  on_navigate: Callable[[str], None],
                  on_open_batch_detail: Callable[[int], None],
                  on_request_image: Callable[[str, str], None]):
         self._on_mode_change = on_mode_change
         self._on_new_batch = on_new_batch
+        self._on_finish_set = on_finish_set
         self._on_navigate = on_navigate
         self._on_open_batch_detail = on_open_batch_detail
         self._on_request_image = on_request_image
@@ -368,8 +370,23 @@ class RaspberryUI:
         )
         self._msg_bar.pack(fill="x", padx=8)
 
+        # ── Bouton "Terminer le compte" — visible seulement en mode SET ──
+        # Un compte SET doit être confirmé explicitement avant d'être envoyé (voir
+        # main.py::_finish_set_count) : sans ça, l'envoi automatique toutes les 30s
+        # coupait une session de comptage en plusieurs lots, et le serveur réinitialisait
+        # le compte à chaque nouveau lot au lieu de l'additionner.
+        self._finish_set_btn = tk.Button(
+            frame, text="✓ Terminer le compte", bg=COLORS["accent"], fg="white",
+            font=("Helvetica", 16, "bold"), relief="flat",
+            activebackground=COLORS["accent_hover"],
+            command=self._on_finish_set,
+            height=2,
+        )
+        # Pas de .pack() ici — affiché/masqué dynamiquement dans _apply_update (kind == "mode")
+
         # ── Boutons tactiles bas de page ──
         btn_frame = tk.Frame(frame, bg=COLORS["bg"])
+        self._btn_frame = btn_frame
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         btn_cfg = [
@@ -1109,6 +1126,10 @@ class RaspberryUI:
             mode = item[1]
             label, color = MODE_LABELS.get(mode, ("?", COLORS["muted"]))
             self._mode_label.config(text=label, fg=color)
+            if mode == "set":
+                self._finish_set_btn.pack(fill="x", padx=8, pady=(0, 4), before=self._btn_frame)
+            else:
+                self._finish_set_btn.pack_forget()
 
         elif kind == "status":
             _, online, pending = item
