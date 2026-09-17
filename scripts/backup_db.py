@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """Backup complet de la base Bellenode (toutes les tables) vers des fichiers JSON.
 
-Usage: python3 backup_db.py
+Usage: python3 backup_db.py [dossier_de_sortie]
+
+Sans argument, écrit dans scripts/db-backups/ (comportement historique, pour un backup
+manuel ponctuel avant une grosse opération). Avec un argument, écrit là à la place — utilisé
+par la tâche cron quotidienne pour déposer les backups dans ~/Sync (synchronisé vers le PC
+Windows d'Anthony via Syncthing), pour ne pas dépendre uniquement de l'hébergeur SmarterASP.
 """
 import datetime
 import decimal
 import json
 import os
+import sys
 
 import pymssql
 
-BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db-backups")
+BASE_DIR = sys.argv[1] if len(sys.argv) > 1 else \
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "db-backups")
 
 
 def json_default(obj):
