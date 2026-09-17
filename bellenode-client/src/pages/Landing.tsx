@@ -18,7 +18,7 @@ export default function Landing() {
             Bellenode est une application pensée pour que la gestion de l'alcool dans un bar ou un
             restaurant devienne invisible : on scanne l'inventaire, l'application calcule automatiquement
             ce qu'il faut commander, et prépare la commande SAQ. L'objectif : que le propriétaire ou le
-            gérant n'ait plus jamais à y penser — juste à aller chercher sa commande chaque semaine.
+            gérant n'ait plus jamais à y penser, juste à aller chercher sa commande chaque semaine.
           </p>
         </section>
 
@@ -26,7 +26,7 @@ export default function Landing() {
           <h2 className="text-lg font-semibold text-white mb-3">Où on en est</h2>
           <p className="text-gray-300 leading-relaxed">
             Bellenode est en développement actif. Ce n'est pas encore une plateforme ouverte au grand
-            public — l'application est actuellement testée avec un premier groupe de restaurants
+            public, l'application est actuellement testée avec un premier groupe de restaurants
             partenaires avant un lancement plus large.
           </p>
         </section>
@@ -36,7 +36,7 @@ export default function Landing() {
           <p className="text-gray-300 leading-relaxed">
             Bellenode est conçu et développé au Québec, par quelqu'un qui travaille lui-même chaque jour
             dans un restaurant. L'application est pensée pour la réalité concrète d'un bar ou d'un
-            restaurant d'ici — les commandes SAQ, les formats de bouteilles, les habitudes du terrain —
+            restaurant d'ici : les commandes SAQ, les formats de bouteilles, les habitudes du terrain,
             pas comme un logiciel générique adapté après coup.
           </p>
         </section>
@@ -47,7 +47,7 @@ export default function Landing() {
             On accepte présentement quelques restaurants pilotes pour tester l'application.
           </p>
           <a
-            href="mailto:abellerose@bellenode.com?subject=Bellenode%20—%20restaurant%20pilote"
+            href="mailto:abellerose@bellenode.com?subject=Bellenode%20-%20restaurant%20pilote"
             className="btn btn-primary inline-flex"
           >
             Nous écrire
