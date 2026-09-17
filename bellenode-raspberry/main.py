@@ -74,6 +74,8 @@ class BellenodeScanner:
         threading.Thread(target=self._scan_loop,      daemon=True, name="ScanLoop").start()
         threading.Thread(target=self._status_loop,    daemon=True, name="StatusLoop").start()
         threading.Thread(target=self._lowstock_loop,  daemon=True, name="LowstockLoop").start()
+        threading.Thread(target=self._stock_refresh_loop,   daemon=True, name="StockRefreshLoop").start()
+        threading.Thread(target=self._catalog_refresh_loop, daemon=True, name="CatalogRefreshLoop").start()
 
         # Interface graphique (thread principal tkinter)
         if not self.no_ui:
@@ -85,6 +87,7 @@ class BellenodeScanner:
                 on_navigate=self._on_navigate,
                 on_open_batch_detail=self._on_open_batch_detail,
                 on_request_image=self._on_request_image,
+                on_adjust_stock=self._adjust_stock_manual,
             )
             self.ui.update_mode(self.mode)
             self.ui.update_status(self.api.is_online(), self.db.pending_count())
@@ -128,10 +131,28 @@ class BellenodeScanner:
         if barcode == config.CMD_SEND_NOW:
             self._flush_now(); return
 
-        # Cherche le produit dans le cache local
-        product = self.api.lookup(barcode)
+        # Si la recherche de l'écran Inventaire est ouverte, un scan sert à trouver la
+        # bouteille dans la liste plutôt qu'à ajuster son stock — évite d'avoir à écrire
+        # le nom au clavier tactile quand on a déjà la bouteille en main.
+        if self.ui and self.ui.is_inventaire_search_active():
+            self.ui.inventaire_search_set(barcode)
+            return
 
-        # Sauvegarde locale immédiate (peu importe si produit connu ou non)
+        # Une caisse connue se résout vers son produit unité pour l'affichage — le code
+        # BRUT de la caisse reste ce qui est sauvegardé/envoyé au serveur (qui fait la
+        # même conversion, voir ScanController.SubmitBatch), seul l'affichage change.
+        # Avant ce fix, une caisse — même correctement mappée côté serveur — s'affichait
+        # toujours "non référencé" sur le Pi puisque le cache local n'était jamais
+        # comparé aux mappings de caisse, seulement à la table Produits.
+        caisse = self.api.lookup_caisse(barcode)
+        unit_code = caisse["codeUnite"] if caisse else barcode
+        qty_mult  = caisse["quantite"] if caisse else 1
+
+        # Cherche le produit (unité résolue, ou le code brut si ce n'est pas une caisse)
+        product = self.api.lookup(unit_code)
+
+        # Sauvegarde locale immédiate (peu importe si produit connu ou non) — le code
+        # BRUT scanné, pas le code unité résolu.
         scan_id = self.db.push(barcode, self.mode, batch_id=0)
 
         if self.mode == "set":
@@ -140,25 +161,27 @@ class BellenodeScanner:
             # n'est pas confirmée via "Terminer le compte" (voir _finish_set_count).
             # Avant, ça passait par apply_local_stock qui remettait toujours à 1.
             count_so_far = self.db.pending_count_for(barcode, "set")
-            stock_before = count_so_far - 1
-            stock_after = count_so_far
+            stock_before = (count_so_far - 1) * qty_mult
+            stock_after = count_so_far * qty_mult
         else:
-            stock_before = self.api.get_stock(barcode)
-            self.api.apply_local_stock(barcode, self.mode)
-            stock_after = self.api.get_stock(barcode)
+            stock_before = self.api.get_stock(unit_code)
+            self.api.apply_local_stock(unit_code, self.mode, qty=qty_mult)
+            stock_after = self.api.get_stock(unit_code)
 
         self.today_scan_count += 1
 
         if product:
             nom    = product["nom"]
             volume = product.get("volume", "")
+            if caisse:
+                volume = f"Caisse de {qty_mult} — {volume}" if volume else f"Caisse de {qty_mult}"
             logger.info(f"✓ [{self.mode}] {nom} {volume}  {stock_before}→{stock_after}")
             if self.ui:
                 self.ui.update_scan(nom, volume, stock_before, stock_after, self.today_scan_count)
-                cached_path = image_cache.get_cached_path(barcode)
-                self.ui.update_scan_image(barcode, cached_path)
+                cached_path = image_cache.get_cached_path(unit_code)
+                self.ui.update_scan_image(unit_code, cached_path)
                 if not cached_path and product.get("imageUrl"):
-                    self._on_request_image(barcode, product["imageUrl"])
+                    self._on_request_image(unit_code, product["imageUrl"])
         else:
             logger.warning(f"Produit non référencé : {barcode}")
             if self.ui:
@@ -245,10 +268,15 @@ class BellenodeScanner:
                 self.db.mark_sent(s.id)
             if result.get("rejected"):
                 logger.error(f"Compte SET rejeté et abandonné ({len(counts)} produit(s))")
+                if self.ui:
+                    self.ui.show_error("Compte rejeté par le serveur — vérifie avec Anthony.")
             else:
                 for code, qty in counts.items():
                     self.api.set_local_stock(code, qty)
                 logger.info(f"Batch #{result.get('batchId')} (compte SET) envoyé avec succès")
+                if self.ui:
+                    mot = "produit" if len(counts) == 1 else "produits"
+                    self.ui.show_success(f"Compte confirmé et envoyé — {len(counts)} {mot}.")
             if self.ui:
                 self.ui.update_status(True, self.db.pending_count())
                 self.ui.update_batch(result.get("batchId"), len(counts))
@@ -259,6 +287,49 @@ class BellenodeScanner:
             if self.ui:
                 self.ui.show_error("Échec de l'envoi — réessaie.")
                 self.ui.update_status(False, self.db.pending_count())
+
+    def _adjust_stock_manual(self, code: str, qty: int):
+        """Ajustement manuel direct — tap sur une ligne de l'écran Inventaire (voir
+        ui.py::_open_adjust_dialog). Permet de corriger un stock à une valeur qu'on
+        n'a plus en main pour la scanner (ex: remettre à 0 une bouteille cassée/jetée),
+        chose impossible avec le mode SET normal qui compte des scans. Envoi immédiat,
+        pas mis en file locale comme les scans : la quantité est une cible explicite
+        (potentiellement 0), pas un compte d'occurrences à accumuler."""
+        result = self.api.send_batch(
+            [{"mode": "set", "code": code, "quantite": qty}],
+            note=f"Ajustement manuel Pi — {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        )
+        if result is not None and not result.get("rejected"):
+            self.api.set_local_stock(code, qty)
+            logger.info(f"Ajustement manuel : {code} → {qty}")
+            if self.ui:
+                self.ui.show_success(f"Stock ajusté à {qty}.")
+                self.ui.update_batch(result.get("batchId"), 1)
+        else:
+            logger.warning(f"Échec ajustement manuel : {code} → {qty}")
+            if self.ui:
+                self.ui.show_error("Échec de l'ajustement — vérifie la connexion et réessaie.")
+
+    # ── Rafraîchissement périodique (stock + catalogue) ──────────────────────
+
+    def _stock_refresh_loop(self):
+        """Garde le stock local à jour avec les changements faits sur le web/téléphone
+        (réception de commande, ajustement manuel) sans attendre la réconciliation
+        nocturne — voir bug du 2026-07-30 où l'affichage du Pi retardait sur la
+        vraie quantité alors que l'historique/le téléphone étaient corrects."""
+        while not self._stop.is_set():
+            time.sleep(config.STOCK_REFRESH_INTERVAL)
+            self.api.refresh_stock()
+
+    def _catalog_refresh_loop(self):
+        """Retélécharge le catalogue produits périodiquement. Sert surtout de filet de
+        sécurité si le téléchargement du démarrage a échoué faute de réseau — avant,
+        le cache restait vide jusqu'à la réconciliation de 2h du matin, ce qui faisait
+        afficher TOUS les scans comme non référencés en attendant (voir bug du
+        2026-08-16)."""
+        while not self._stop.is_set():
+            time.sleep(config.CATALOG_REFRESH_INTERVAL)
+            self.api.refresh_products()
 
     # ── Vérification périodique de la connexion réseau ───────────────────────
 

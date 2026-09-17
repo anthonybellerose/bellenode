@@ -1,5 +1,6 @@
 using BellenodeApi.Data;
 using BellenodeApi.Models;
+using BellenodeApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,10 +23,22 @@ public class ProductsController : BellenodeControllerBase
             return Ok(Array.Empty<Product>());
 
         var s = search.Trim().ToLower();
+
+        // Si la recherche ressemble à un code-barres, tolère un écart d'un zéro (ex: recherche
+        // depuis le téléphone en scannant une bouteille dont l'UPC diffère d'un 0 par rapport
+        // à celui affiché sur SAQ.com/enregistré) — même tolérance que ScanController.
+        string? zeroAdded = s.Length > 0 && s.All(char.IsDigit) ? "0" + s : null;
+        string? zeroStripped = s.Length > 1 && s[0] == '0' && s.All(char.IsDigit) ? s[1..] : null;
+
         var matches = await _db.Products
             .Where(p => p.Nom.ToLower().Contains(s) ||
                         p.CodeUpc.Contains(s) ||
-                        (p.CodeSaq != null && p.CodeSaq.Contains(s)))
+                        (zeroAdded != null && p.CodeUpc.Contains(zeroAdded)) ||
+                        (zeroStripped != null && p.CodeUpc.Contains(zeroStripped)) ||
+                        (p.CodeSaq != null && p.CodeSaq.Contains(s)) ||
+                        (p.AltCodes != null && p.AltCodes.Contains(s)) ||
+                        (p.AltCodes != null && zeroAdded != null && p.AltCodes.Contains(zeroAdded)) ||
+                        (p.AltCodes != null && zeroStripped != null && p.AltCodes.Contains(zeroStripped)))
             .OrderBy(p => p.Nom)
             .Take(300)
             .ToListAsync();
@@ -54,13 +67,27 @@ public class ProductsController : BellenodeControllerBase
     // filtre de recherche de GetAll — utilisée pour le cache local du scanner
     // Raspberry Pi, qui doit pouvoir résoudre n'importe quel produit du catalogue
     // SAQ dès le premier scan (y compris sa photo, mise en cache localement sur le Pi).
+    //
+    // Émet aussi une entrée par code alternatif (AltCodes) pointant vers les mêmes infos,
+    // pour que le Pi affiche le bon produit même en scannant un UPC alternatif (ex: un 0
+    // en trop, fréquent sur le site SAQ) — sans ça le Pi affiche "non référencé" même
+    // pour un produit dont le code alternatif est pourtant déjà connu côté serveur.
     [HttpGet("cache-pi")]
     public async Task<IActionResult> GetCachePi()
     {
         var products = await _db.Products
-            .Select(p => new { p.CodeUpc, p.Nom, p.Volume, p.ImageUrl })
+            .Select(p => new { p.CodeUpc, p.Nom, p.Volume, p.ImageUrl, p.AltCodes })
             .ToListAsync();
-        return Ok(products);
+
+        var result = new List<object>(products.Count);
+        foreach (var p in products)
+        {
+            result.Add(new { codeUpc = p.CodeUpc, p.Nom, p.Volume, p.ImageUrl });
+            if (!string.IsNullOrEmpty(p.AltCodes))
+                foreach (var alt in p.AltCodes.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                    result.Add(new { codeUpc = alt, p.Nom, p.Volume, p.ImageUrl });
+        }
+        return Ok(result);
     }
 
     [HttpGet("{id}")]
@@ -76,13 +103,29 @@ public class ProductsController : BellenodeControllerBase
         var product = await _db.Products.FirstOrDefaultAsync(p => p.CodeUpc == code);
         if (product is not null) return Ok(product);
 
-        // Chercher dans les codes alternatifs
+        var match = await FindByAltCode(code);
+        if (match is not null) return Ok(match);
+
+        // Tolère un écart d'un zéro (ex: SAQ.com affiche parfois un UPC avec un 0 en trop
+        // par rapport à celui sur la bouteille) — même tolérance que ScanController.
+        foreach (var variant in BarcodeTolerance.ZeroVariants(code))
+        {
+            var p = await _db.Products.FirstOrDefaultAsync(p => p.CodeUpc == variant);
+            if (p is not null) return Ok(p);
+            var alt = await FindByAltCode(variant);
+            if (alt is not null) return Ok(alt);
+        }
+
+        return NotFound();
+    }
+
+    private async Task<Product?> FindByAltCode(string code)
+    {
         var candidates = await _db.Products
             .Where(p => p.AltCodes != null && p.AltCodes.Contains(code))
             .ToListAsync();
-        var match = candidates.FirstOrDefault(p =>
+        return candidates.FirstOrDefault(p =>
             p.AltCodes!.Split(';', StringSplitOptions.RemoveEmptyEntries).Contains(code));
-        return match is null ? NotFound() : Ok(match);
     }
 
     [HttpPost]

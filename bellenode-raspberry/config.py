@@ -32,6 +32,13 @@ RETRY_INTERVAL  = getint("queue", "retry_interval_seconds", 30)
 RECONCILE_HOUR  = getint("queue", "reconcile_hour", 2)
 STATUS_CHECK_INTERVAL   = getint("queue", "status_check_interval_seconds", 10)
 LOWSTOCK_CHECK_INTERVAL = getint("queue", "lowstock_check_interval_seconds", 60)
+# Stock (léger : juste les quantités du restaurant) — rafraîchi souvent pour rester
+# synchronisé avec les commandes reçues / ajustements faits sur le web ou le téléphone.
+STOCK_REFRESH_INTERVAL   = getint("queue", "stock_refresh_interval_seconds", 120)
+# Catalogue complet (25k+ produits, plus lourd) — rafraîchi moins souvent, mais surtout
+# sert de filet de sécurité si le téléchargement du démarrage a échoué (réseau pas encore
+# prêt au boot) : avant, il fallait attendre la réconciliation de 2h du matin.
+CATALOG_REFRESH_INTERVAL = getint("queue", "catalog_refresh_interval_seconds", 1800)
 
 DISPLAY_WIDTH   = getint("display", "width",  1280)
 DISPLAY_HEIGHT  = getint("display", "height", 720)

@@ -5,6 +5,7 @@ Endpoints utilisés :
   POST /api/auth/login              → JWT token
   POST /api/scan/batch              → envoie un batch d'opérations
   GET  /api/products/cache-pi       → liste allégée des produits (cache local)
+  GET  /api/CaisseMappings          → mappings caisse → produit unité (cache local)
   GET  /api/inventory                → stock actuel par restaurant
   GET  /api/inventory/objectifs      → statut min/max/qtyPending (Stock bas, À venir)
   GET  /api/batches, /api/batches/{id} → historique des entrées/sorties
@@ -30,6 +31,8 @@ class BellenodeClient:
         self._products: dict[str, dict] = {}
         # Cache inventaire : codeUpc → stock actuel (estimé localement)
         self._stock: dict[str, int] = {}
+        # Cache mappings de caisse : codeCaisse → {codeUnite, quantite}
+        self._caisses: dict[str, dict] = {}
 
     # ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -62,7 +65,11 @@ class BellenodeClient:
     # ── Cache produits ────────────────────────────────────────────────────────
 
     def refresh_products(self) -> bool:
-        """Télécharge la liste complète des produits et le stock actuel."""
+        """Télécharge la liste complète des produits (catalogue, 25k+ items, peu changeant)
+        et le stock actuel. Appelé au démarrage, à la réconciliation nocturne, et
+        périodiquement (voir CATALOG_REFRESH_INTERVAL) — ce dernier sert surtout de filet
+        de sécurité si le téléchargement du démarrage échoue faute de réseau (le cache
+        restait vide toute la journée avant, voir bug du 2026-08-16)."""
         if not self._ensure_auth():
             return False
         try:
@@ -78,27 +85,66 @@ class BellenodeClient:
                         "volume":   p.get("volume", ""),
                         "imageUrl": p.get("imageUrl"),
                     }
-
-            # Stock actuel du restaurant
-            r2 = self._session.get(
-                f"{config.API_URL}/api/inventory",
-                timeout=15,
-            )
-            r2.raise_for_status()
-            for item in r2.json():
-                code = item.get("code", "")
-                if code:
-                    self._stock[code] = item.get("quantite", 0)
-
-            logger.info(f"Cache produits : {len(self._products)} produits, {len(self._stock)} en stock")
-            return True
+            logger.info(f"Cache produits : {len(self._products)} produits")
         except Exception as e:
             logger.error(f"Erreur refresh_products : {e}")
             return False
 
+        # Mappings de caisse — non bloquant : une erreur ici ne doit pas invalider tout
+        # le cache produits qu'on vient de récupérer avec succès.
+        try:
+            r = self._session.get(f"{config.API_URL}/api/CaisseMappings", timeout=15)
+            r.raise_for_status()
+            for m in r.json():
+                code_caisse = m.get("codeCaisse")
+                if code_caisse:
+                    self._caisses[code_caisse] = {
+                        "codeUnite": m.get("codeUnite", ""),
+                        "quantite":  m.get("quantite") or 1,
+                    }
+            logger.info(f"Cache caisses : {len(self._caisses)} mappings")
+        except Exception as e:
+            logger.warning(f"Erreur refresh mappings de caisse (non bloquant) : {e}")
+
+        self.refresh_stock()
+        return True
+
+    def refresh_stock(self) -> bool:
+        """Rafraîchit uniquement le stock actuel (léger — juste les quantités du
+        restaurant). Appelé souvent (voir STOCK_REFRESH_INTERVAL) pour que l'affichage
+        du Pi ne retarde pas sur une commande reçue ou un ajustement fait sur le web/
+        téléphone (voir bug du 2026-07-30)."""
+        if not self._ensure_auth():
+            return False
+        try:
+            r = self._session.get(f"{config.API_URL}/api/inventory", timeout=15)
+            r.raise_for_status()
+            for item in r.json():
+                code = item.get("code", "")
+                if code:
+                    self._stock[code] = item.get("quantite", 0)
+            logger.info(f"Stock actualisé : {len(self._stock)} produits en stock")
+            return True
+        except Exception as e:
+            logger.warning(f"Erreur refresh_stock : {e}")
+            return False
+
     def lookup(self, barcode: str) -> dict | None:
-        """Retourne les infos du produit depuis le cache, ou None si inconnu."""
-        return self._products.get(barcode)
+        """Retourne les infos du produit depuis le cache. Tolère un écart d'un zéro (souvent
+        en tête) si le code exact est inconnu — même tolérance que côté serveur
+        (ScanController), pour que l'affichage du Pi ne dise pas "non référencé" pour un
+        code que le serveur reconnaîtrait pourtant très bien."""
+        if barcode in self._products:
+            return self._products[barcode]
+        for variant in ("0" + barcode, barcode[1:] if barcode.startswith("0") and len(barcode) > 1 else None):
+            if variant and variant in self._products:
+                return self._products[variant]
+        return None
+
+    def lookup_caisse(self, barcode: str) -> dict | None:
+        """Retourne {codeUnite, quantite} si ce code-barres est une caisse connue
+        (voir CaisseMappings), sinon None."""
+        return self._caisses.get(barcode)
 
     def get_stock(self, barcode: str) -> int:
         return self._stock.get(barcode, 0)

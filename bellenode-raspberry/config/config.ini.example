@@ -33,6 +33,15 @@ status_check_interval_seconds = 10
 # Secondes entre chaque rafraîchissement du badge stock bas (écran principal)
 lowstock_check_interval_seconds = 60
 
+# Secondes entre chaque rafraîchissement du stock (léger) — garde le Pi synchronisé
+# avec les commandes reçues / ajustements faits sur le web ou le téléphone
+stock_refresh_interval_seconds = 120
+
+# Secondes entre chaque retéléchargement du catalogue produits complet (plus lourd,
+# 25k+ produits) — sert aussi de filet de sécurité si le téléchargement du démarrage
+# a échoué faute de réseau
+catalog_refresh_interval_seconds = 1800
+
 [display]
 # Taille RÉELLE de l'écran connecté (vérifiée via wlr-randr : 720x1280 natif
 # tourné à l'horizontale = 1280x720 utilisable). Sert au calcul de mise en page

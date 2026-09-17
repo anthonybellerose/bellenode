@@ -132,18 +132,19 @@ def _row_inventaire(item: dict) -> dict:
     nom = (item.get("nom") or code or "?")[:30]
     qty = item.get("quantite", 0)
     prix = _fmt_money(item.get("prix"))
-    return {"text": f"{nom:<30} {qty:>5}  {prix:>7}", "id": None, "color": COLORS["text"],
+    return {"text": f"{nom:<30} {qty:>5}  {prix:>7}  {code or '':>13}", "id": None, "color": COLORS["text"],
             "image_code": code, "image_url": item.get("imageUrl")}
 
 
 def _row_stockbas(item: dict) -> dict:
-    nom = (item.get("nom") or item.get("code") or "?")[:26]
+    code = item.get("code")
+    nom = (item.get("nom") or code or "?")[:26]
     qty = item.get("qtyActuelle", 0)
     minq = item.get("minQty") or 0
     rupture = item.get("statut") == "rupture"
     statut = "RUPTURE" if rupture else "BAS"
     color = COLORS["error"] if rupture else COLORS["warning"]
-    return {"text": f"{nom:<26} {qty:>6}  min {minq:>4}  {statut}", "id": None, "color": color,
+    return {"text": f"{nom:<26} {qty:>6}  min {minq:>4}  {statut:<8} {code or '':>13}", "id": None, "color": color,
             "image_code": None, "image_url": None}
 
 
@@ -152,7 +153,7 @@ def _row_avenir(item: dict) -> dict:
     nom = (item.get("nom") or code or "?")[:26]
     qty = item.get("qtyActuelle", 0)
     pend = item.get("qtyPending") or 0
-    return {"text": f"{nom:<26} actuel {qty:>4}  en route {pend:>4}", "id": None, "color": COLORS["accent"],
+    return {"text": f"{nom:<26} actuel {qty:>4}  en route {pend:>4}  {code or '':>13}", "id": None, "color": COLORS["accent"],
             "image_code": code, "image_url": item.get("imageUrl")}
 
 
@@ -178,10 +179,11 @@ def _row_historique(item: dict) -> dict:
 
 def _row_operation(op: dict) -> dict:
     symbol, color = BATCH_MODE_SYMBOLS.get(op.get("mode"), ("?", COLORS["muted"]))
-    nom = (op.get("nom") or op.get("code") or "?")[:26]
+    code = op.get("code")
+    nom = (op.get("nom") or code or "?")[:26]
     avant = op.get("qtyAvant", 0)
     apres = op.get("qtyApres", 0)
-    return {"text": f"{symbol} {nom:<26} {avant:>4} → {apres:<4}", "id": None, "color": color,
+    return {"text": f"{symbol} {nom:<26} {avant:>4} → {apres:<4}  {code or '':>13}", "id": None, "color": color,
             "image_code": None, "image_url": None}
 
 
@@ -224,13 +226,15 @@ class RaspberryUI:
                  on_finish_set: Callable[[], None],
                  on_navigate: Callable[[str], None],
                  on_open_batch_detail: Callable[[int], None],
-                 on_request_image: Callable[[str, str], None]):
+                 on_request_image: Callable[[str, str], None],
+                 on_adjust_stock: Callable[[str, int], None]):
         self._on_mode_change = on_mode_change
         self._on_new_batch = on_new_batch
         self._on_finish_set = on_finish_set
         self._on_navigate = on_navigate
         self._on_open_batch_detail = on_open_batch_detail
         self._on_request_image = on_request_image
+        self._on_adjust_stock = on_adjust_stock
         self._update_queue: queue.Queue = queue.Queue()
 
         self._lists: dict[str, dict] = {}
@@ -242,6 +246,8 @@ class RaspberryUI:
         self.root.title("Bellenode Scanner")
         self.root.configure(bg=COLORS["bg"])
         self.root.attributes("-fullscreen", config.FULLSCREEN)
+        if config.FULLSCREEN:
+            self.root.after(5000, self._enforce_fullscreen)
 
         self._container = tk.Frame(self.root, bg=COLORS["bg"])
         self._container.pack(fill="both", expand=True)
@@ -434,6 +440,17 @@ class RaspberryUI:
             logger.info("relâché avant la fin du délai — annulé")
             self.root.after_cancel(self._hidden_press_job)
             self._hidden_press_job = None
+
+    def _enforce_fullscreen(self):
+        """Réaffirme le plein écran périodiquement au lieu de le fixer une seule fois au
+        démarrage — sur certains environnements Linux (le Pi tourne labwc/Wayland via
+        XWayland), l'attribut peut se faire annuler par le gestionnaire de fenêtres après
+        un événement qu'on n'a pas pu reproduire précisément en test (dialogue, réveil
+        d'écran...). Se corrige tout seul plutôt que de rester coincé en mode fenêtré
+        jusqu'au prochain redémarrage manuel de l'appareil."""
+        if not self.root.attributes("-fullscreen"):
+            self.root.attributes("-fullscreen", True)
+        self.root.after(5000, self._enforce_fullscreen)
 
     def _open_exit_pin_dialog(self):
         self._hidden_press_job = None
@@ -750,6 +767,16 @@ class RaspberryUI:
         self._inv_update_search_label()
         self._inv_recompute()
 
+    def is_inventaire_search_active(self) -> bool:
+        """Appelé depuis le thread de scan (main.py::_handle_barcode) pour router un
+        scan vers la recherche plutôt que vers un ajustement de stock quand l'écran
+        Inventaire est ouvert avec la recherche active — évite d'avoir à écrire le nom
+        au clavier tactile quand on a déjà la bouteille en main."""
+        return self._current == "inventaire" and self._lists["inventaire"]["search_mode"]
+
+    def inventaire_search_set(self, text: str):
+        self._update_queue.put(("inv_search_set", text))
+
     def _inv_update_search_label(self):
         st = self._lists["inventaire"]
         text = st["search"]
@@ -766,7 +793,8 @@ class RaspberryUI:
         search = st["search"].strip().lower()
         data = st["data"]
         if search:
-            filtered = [d for d in data if search in (d.get("nom") or "").lower()]
+            filtered = [d for d in data if search in (d.get("nom") or "").lower()
+                        or search in (d.get("code") or "").lower()]
         else:
             filtered = list(data)
         if st["sort"] == "alpha":
@@ -793,14 +821,107 @@ class RaspberryUI:
 
         for i, row in enumerate(st["rows"]):
             if i < len(chunk):
-                f = _row_inventaire(chunk[i])
-                row["text_label"].config(text=f["text"], fg=f["color"])
+                item = chunk[i]
+                f = _row_inventaire(item)
+                row["text_label"].config(text=f["text"], fg=f["color"], cursor="hand2")
+                code = item.get("code")
+                nom = item.get("nom") or code or "?"
+                qty = item.get("quantite", 0)
+                row["text_label"].bind(
+                    "<Button-1>",
+                    lambda e, code=code, nom=nom, qty=qty: self._open_adjust_dialog(code, nom, qty),
+                )
                 self._set_row_image(row, f["image_code"], f["image_url"])
             else:
                 empty_msg = "Aucun résultat." if (i == 0 and st["search"]) else \
                             ("Aucune donnée." if (i == 0 and not filtered) else "")
-                row["text_label"].config(text=empty_msg, fg=COLORS["muted"])
+                row["text_label"].config(text=empty_msg, fg=COLORS["muted"], cursor="arrow")
+                row["text_label"].unbind("<Button-1>")
                 self._set_row_image(row, None, None)
+
+    # ── Ajustement manuel du stock (tap sur une ligne d'Inventaire) ───────────
+    # Pour corriger un stock à une valeur qu'on n'a plus en main pour la scanner
+    # (ex: remettre à 0 une bouteille cassée/jetée) — voir main.py::_adjust_stock_manual.
+    # Envoi direct comme _finish_set_count, pas mis en file locale, car il représente
+    # une quantité cible explicite (potentiellement 0) plutôt qu'un compte de scans.
+
+    def _open_adjust_dialog(self, code: str | None, nom: str, qty_actuelle: int):
+        if not code:
+            return
+        val = {"value": ""}
+
+        W, H = 360, 480
+        sw, sh = config.DISPLAY_WIDTH, config.DISPLAY_HEIGHT
+        dlg = tk.Toplevel(self.root)
+        dlg.configure(bg=COLORS["card"])
+        dlg.title("Ajuster le stock")
+        dlg.transient(self.root)
+        dlg.resizable(False, False)
+        dlg.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+
+        content = tk.Frame(dlg, bg=COLORS["card"])
+        content.pack(fill="both", expand=True)
+
+        tk.Label(
+            content, text=nom[:34], bg=COLORS["card"], fg=COLORS["text"],
+            font=("Helvetica", 14, "bold"), wraplength=W - 24,
+        ).pack(pady=(14, 2))
+        tk.Label(
+            content, text=f"Stock actuel : {qty_actuelle}   ·   {code}",
+            bg=COLORS["card"], fg=COLORS["muted"], font=("Helvetica", 11),
+        ).pack(pady=(0, 6))
+
+        value_label = tk.Label(
+            content, text="0", bg=COLORS["card"], fg=COLORS["accent"], font=("Helvetica", 30, "bold"),
+        )
+        value_label.pack(pady=(0, 4))
+
+        def update_value():
+            value_label.config(text=val["value"] or "0")
+
+        def press_digit(d: str):
+            if len(val["value"]) >= 5:
+                return
+            val["value"] += d
+            update_value()
+
+        def backspace():
+            val["value"] = val["value"][:-1]
+            update_value()
+
+        def confirm():
+            qty = int(val["value"]) if val["value"] else 0
+            dlg.destroy()
+            self._on_adjust_stock(code, qty)
+
+        keypad = tk.Frame(content, bg=COLORS["card"])
+        keypad.pack(padx=14, pady=6, fill="both", expand=True)
+        rows = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["Annuler", "0", "⌫"]]
+        for row in rows:
+            row_f = tk.Frame(keypad, bg=COLORS["card"])
+            row_f.pack(fill="both", expand=True, pady=2)
+            for ch in row:
+                if ch == "Annuler":
+                    cmd, bg = dlg.destroy, COLORS["error"]
+                elif ch == "⌫":
+                    cmd, bg = backspace, COLORS["muted"]
+                else:
+                    cmd, bg = (lambda d=ch: press_digit(d)), COLORS["border"]
+                tk.Button(
+                    row_f, text=ch, bg=bg, fg="white", font=("Helvetica", 15, "bold"),
+                    relief="flat", command=cmd,
+                ).pack(side="left", expand=True, fill="both", padx=3)
+
+        tk.Button(
+            content, text="✓ Confirmer le nouveau stock", bg=COLORS["success"], fg="white",
+            font=("Helvetica", 15, "bold"), relief="flat", height=2,
+            command=confirm,
+        ).pack(fill="x", padx=14, pady=(4, 12))
+
+        dlg.update_idletasks()
+        dlg.attributes("-topmost", True)
+        dlg.grab_set()
+        dlg.focus_force()
 
         if filtered:
             shown_end = min(offset + INV_ROWS_NORMAL, len(filtered))
@@ -1077,6 +1198,9 @@ class RaspberryUI:
     def show_error(self, msg: str):
         self._update_queue.put(("error", msg))
 
+    def show_success(self, msg: str):
+        self._update_queue.put(("success", msg))
+
     def show_unknown(self, barcode: str):
         self._update_queue.put(("unknown", barcode))
 
@@ -1167,6 +1291,15 @@ class RaspberryUI:
 
         elif kind == "error":
             self._msg_bar.config(text=f"⚠ {item[1]}", fg=COLORS["error"])
+
+        elif kind == "success":
+            self._msg_bar.config(text=f"✓ {item[1]}", fg=COLORS["success"])
+
+        elif kind == "inv_search_set":
+            st = self._lists["inventaire"]
+            st["search"] = item[1]
+            self._inv_update_search_label()
+            self._inv_recompute()
 
         elif kind == "unknown":
             barcode = item[1]

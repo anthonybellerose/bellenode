@@ -1,5 +1,6 @@
 using BellenodeApi.Data;
 using BellenodeApi.Models;
+using BellenodeApi.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -27,11 +28,59 @@ public class ScanController : BellenodeControllerBase
         if (req.Operations == null || req.Operations.Count == 0)
             return BadRequest(new { error = "Aucune opération." });
 
-        var referencedCodes = new HashSet<string>(
-            await _db.Products.Select(p => p.CodeUpc).ToListAsync());
+        var products = await _db.Products
+            .Select(p => new { p.CodeUpc, p.AltCodes })
+            .ToListAsync();
+
+        var referencedCodes = new HashSet<string>(products.Select(p => p.CodeUpc));
+
+        // Résout un code alternatif (ex: UPC avec un 0 en trop, fréquent sur le site SAQ)
+        // vers le CodeUpc canonique du produit, pour que l'inventaire s'accumule sur une
+        // seule ligne au lieu d'en créer une deuxième "non référencée" pour le même produit.
+        var altCodeMap = new Dictionary<string, string>();
+        foreach (var p in products)
+        {
+            if (string.IsNullOrEmpty(p.AltCodes)) continue;
+            foreach (var alt in p.AltCodes.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                altCodeMap[alt] = p.CodeUpc;
+        }
 
         var mappings = await _db.CaisseMappings
             .ToDictionaryAsync(m => m.CodeCaisse, m => (m.CodeUnite, m.Quantite));
+
+        // Résout un code vers son CodeUpc canonique, en tolérant un écart d'un zéro (ex: SAQ.com
+        // affiche parfois un UPC avec un 0 en trop par rapport à celui sur la bouteille) si aucun
+        // match exact n'existe. ViaTolerance=true seulement quand c'est cette tolérance qui a
+        // permis le match (pas un AltCode déjà connu) — sert à décider si on doit l'enregistrer.
+        (string Code, bool ViaTolerance)? ResolveCanonical(string rawCode)
+        {
+            if (referencedCodes.Contains(rawCode)) return (rawCode, false);
+            if (altCodeMap.TryGetValue(rawCode, out var direct)) return (direct, false);
+            foreach (var variant in BarcodeTolerance.ZeroVariants(rawCode))
+            {
+                if (referencedCodes.Contains(variant)) return (variant, true);
+                if (altCodeMap.TryGetValue(variant, out var viaAlt)) return (viaAlt, true);
+            }
+            return null;
+        }
+
+        // Un match trouvé seulement via tolérance est enregistré comme code alternatif
+        // permanent sur le produit — le prochain scan de ce code exact le retrouvera
+        // directement, sans repasser par la tolérance (catalogue qui s'auto-corrige).
+        async Task PersistAsAltCode(string canonicalCode, string newAlt)
+        {
+            var product = await _db.Products.FirstOrDefaultAsync(p => p.CodeUpc == canonicalCode);
+            if (product is null) return;
+            var existing = string.IsNullOrEmpty(product.AltCodes)
+                ? new List<string>()
+                : product.AltCodes.Split(';', StringSplitOptions.RemoveEmptyEntries).ToList();
+            if (existing.Contains(newAlt)) return;
+            existing.Add(newAlt);
+            product.AltCodes = string.Join(';', existing);
+            product.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            altCodeMap[newAlt] = canonicalCode;
+        }
 
         var converted = new List<(ScanMode mode, string code, int qty)>();
         foreach (var raw in req.Operations)
@@ -50,9 +99,22 @@ public class ScanController : BellenodeControllerBase
             if (code.Length == 0 || code.Length > 32) continue;
 
             if (mappings.TryGetValue(code, out var map))
+            {
                 converted.Add((mode.Value, map.CodeUnite, qty * map.Quantite));
+                continue;
+            }
+
+            var resolved = ResolveCanonical(code);
+            if (resolved is { } r)
+            {
+                if (r.ViaTolerance)
+                    await PersistAsAltCode(r.Code, code);
+                converted.Add((mode.Value, r.Code, qty));
+            }
             else
+            {
                 converted.Add((mode.Value, code, qty));
+            }
         }
 
         if (converted.Count == 0)
@@ -140,6 +202,12 @@ public class ScanController : BellenodeControllerBase
         batch.TotalRetraits = totalSubs;
 
         await _db.SaveChangesAsync();
+
+        // Recroise TOUS les non-référencés du restaurant contre le catalogue à chaque batch —
+        // pas seulement les codes de ce batch — pour qu'un produit ajouté au catalogue après
+        // coup se raccroche à son inventaire existant sans attendre une visite de la page
+        // "Non référencés" (voir InventoryReconciliation).
+        await InventoryReconciliation.ReconcileAsync(_db, restaurantId.Value);
 
         return Ok(new
         {
