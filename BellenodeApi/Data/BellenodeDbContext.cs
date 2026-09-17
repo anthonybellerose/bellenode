@@ -49,6 +49,7 @@ public class BellenodeDbContext : DbContext
     public DbSet<CommandeSAQ> CommandesSAQ => Set<CommandeSAQ>();
     public DbSet<CommandeSAQItem> CommandeSAQItems => Set<CommandeSAQItem>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PiHealthLog> PiHealthLogs => Set<PiHealthLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

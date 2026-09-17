@@ -6,6 +6,7 @@ Endpoints utilisés :
   POST /api/scan/batch              → envoie un batch d'opérations
   GET  /api/products/cache-pi       → liste allégée des produits (cache local)
   GET  /api/CaisseMappings          → mappings caisse → produit unité (cache local)
+  POST /api/pihealth                → température/throttling (monitoring matériel)
   GET  /api/inventory                → stock actuel par restaurant
   GET  /api/inventory/objectifs      → statut min/max/qtyPending (Stock bas, À venir)
   GET  /api/batches, /api/batches/{id} → historique des entrées/sorties
@@ -221,6 +222,24 @@ class BellenodeClient:
         except Exception as e:
             logger.warning(f"Erreur réseau send_batch : {e}")
             return None
+
+    def report_health(self, temp_c: float, throttled: bool) -> bool:
+        """Envoie une lecture de température/throttling — conservée en base côté serveur
+        pour survivre aux redémarrages fréquents du Pi (contrairement au compteur
+        throttled du Pi lui-même, qui se réinitialise à chaque boot)."""
+        if not self._ensure_auth():
+            return False
+        try:
+            r = self._session.post(
+                f"{config.API_URL}/api/pihealth",
+                json={"tempC": temp_c, "throttled": throttled},
+                timeout=10,
+            )
+            r.raise_for_status()
+            return True
+        except Exception as e:
+            logger.warning(f"Erreur report_health : {e}")
+            return False
 
     def is_online(self) -> bool:
         try:

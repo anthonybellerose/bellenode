@@ -17,6 +17,7 @@ import argparse
 import logging
 import os
 import queue
+import subprocess
 import sys
 import threading
 import time
@@ -40,6 +41,27 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("main")
+
+
+def _read_pi_health() -> tuple[float, bool] | None:
+    """Lit température (°C) et throttling via vcgencmd. Retourne None si indisponible
+    (ex: en test sur un serveur qui n'est pas un vrai Raspberry Pi) — pas d'erreur
+    bruyante dans ce cas, c'est un environnement de dev normal."""
+    try:
+        temp_out = subprocess.run(
+            ["vcgencmd", "measure_temp"], capture_output=True, text=True, timeout=5
+        )
+        temp_c = float(temp_out.stdout.strip().split("=")[1].split("'")[0])
+
+        throttle_out = subprocess.run(
+            ["vcgencmd", "get_throttled"], capture_output=True, text=True, timeout=5
+        )
+        throttle_val = int(throttle_out.stdout.strip().split("=")[1], 16)
+
+        return temp_c, throttle_val != 0
+    except Exception as e:
+        logger.debug(f"Lecture santé Pi indisponible : {e}")
+        return None
 
 
 class BellenodeScanner:
@@ -76,6 +98,7 @@ class BellenodeScanner:
         threading.Thread(target=self._lowstock_loop,  daemon=True, name="LowstockLoop").start()
         threading.Thread(target=self._stock_refresh_loop,   daemon=True, name="StockRefreshLoop").start()
         threading.Thread(target=self._catalog_refresh_loop, daemon=True, name="CatalogRefreshLoop").start()
+        threading.Thread(target=self._health_report_loop,   daemon=True, name="HealthReportLoop").start()
 
         # Interface graphique (thread principal tkinter)
         if not self.no_ui:
@@ -330,6 +353,19 @@ class BellenodeScanner:
         while not self._stop.is_set():
             time.sleep(config.CATALOG_REFRESH_INTERVAL)
             self.api.refresh_products()
+
+    def _health_report_loop(self):
+        """Envoie température/throttling au serveur périodiquement — voir
+        _read_pi_health. Le Pi est placé dans un endroit qui chauffe l'été ; avant, rien
+        n'enregistrait cette donnée nulle part, et le compteur throttled du Pi lui-même se
+        réinitialise à chaque redémarrage (fréquents), donc impossible de savoir après
+        coup s'il y a eu de la surchauffe."""
+        while not self._stop.is_set():
+            time.sleep(config.HEALTH_REPORT_INTERVAL)
+            reading = _read_pi_health()
+            if reading:
+                temp_c, throttled = reading
+                self.api.report_health(temp_c, throttled)
 
     # ── Vérification périodique de la connexion réseau ───────────────────────
 

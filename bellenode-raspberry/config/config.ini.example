@@ -42,6 +42,11 @@ stock_refresh_interval_seconds = 120
 # a échoué faute de réseau
 catalog_refresh_interval_seconds = 1800
 
+# Secondes entre chaque envoi de la température/throttling du Pi au serveur (monitoring
+# matériel — voir bug de l'été 2026 où on ne pouvait pas savoir après coup s'il y a eu
+# de la surchauffe)
+health_report_interval_seconds = 900
+
 [display]
 # Taille RÉELLE de l'écran connecté (vérifiée via wlr-randr : 720x1280 natif
 # tourné à l'horizontale = 1280x720 utilisable). Sert au calcul de mise en page
